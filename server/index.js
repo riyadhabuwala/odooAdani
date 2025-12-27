@@ -198,7 +198,8 @@ const requireRole = (allowedRoles) => {
 };
 
 const getUserIdFromJwt = (req) => {
-    const id = parseIntSafe(req.user?.sub);
+    // Prefer standard JWT subject (sub). Fall back to legacy payloads that used `id`.
+    const id = parseIntSafe(req.user?.sub) ?? parseIntSafe(req.user?.id);
     return id || null;
 };
 
@@ -601,9 +602,23 @@ app.get('/api/stats', authMiddleware, requireDb, requireRole(['admin', 'technici
 
 // --- Equipment CRUD ---
 app.get('/api/equipment', authMiddleware, requireDb, requireRole(['admin', 'technician', 'employee']), async (req, res) => {
+    const role = normalizeRole(req.user?.role);
+    const userId = getUserIdFromJwt(req);
+
+    if (role === 'employee' && !userId) {
+        return res.status(401).json({ error: 'Invalid token (missing user id)' });
+    }
+
     const q = String(req.query.q || '').trim();
     const params = [];
     let where = 'WHERE 1=1';
+
+    // Data-level RBAC: employees can only see equipment assigned to them.
+    if (role === 'employee') {
+        params.push(userId);
+        where += ` AND e.employee_id = $${params.length}`;
+    }
+
     if (q) {
         params.push(`%${q}%`);
         where += ` AND (e.name ILIKE $${params.length} OR e.serial_number ILIKE $${params.length} OR COALESCE(e.category,'') ILIKE $${params.length} OR COALESCE(e.company,'') ILIKE $${params.length})`;
@@ -736,6 +751,11 @@ app.get('/api/requests', authMiddleware, requireDb, requireRole(['admin', 'techn
     const role = normalizeRole(req.user?.role);
     const userId = getUserIdFromJwt(req);
 
+    // Never allow employee/technician to fall back to "all data" when token is missing an id.
+    if ((role === 'employee' || role === 'technician') && !userId) {
+        return res.status(401).json({ error: 'Invalid token (missing user id)' });
+    }
+
     const params = [];
     let where = 'WHERE 1=1';
     if (from && !Number.isNaN(from.getTime())) {
@@ -748,13 +768,13 @@ app.get('/api/requests', authMiddleware, requireDb, requireRole(['admin', 'techn
     }
 
     // Data-level RBAC
-    if (role === 'employee' && userId) {
+    if (role === 'employee') {
         params.push(userId);
         where += ` AND mr.requested_by_id = $${params.length}`;
     }
 
     try {
-        if (role === 'technician' && userId) {
+        if (role === 'technician') {
             const teamsRes = await pool.query(
                 `SELECT DISTINCT t.name
                  FROM teams t
@@ -860,6 +880,10 @@ app.post('/api/requests', authMiddleware, requireDb, requireRole(['admin', 'empl
     const role = normalizeRole(req.user?.role);
     const userId = getUserIdFromJwt(req);
 
+    if (role === 'employee' && !userId) {
+        return res.status(401).json({ error: 'Invalid token (missing user id)' });
+    }
+
     const equipmentId = parseIntSafe(equipment_id);
     const prio = parseIntSafe(priority, 3);
 
@@ -929,6 +953,10 @@ app.put('/api/requests/:id', authMiddleware, requireDb, requireRole(['admin', 't
     if (!id) return res.status(400).json({ error: 'Invalid id' });
     const role = normalizeRole(req.user?.role);
     const userId = getUserIdFromJwt(req);
+
+    if (role === 'technician' && !userId) {
+        return res.status(401).json({ error: 'Invalid token (missing user id)' });
+    }
 
     // Technician: only update status and scheduled_end (duration)
     if (role === 'technician' && userId) {

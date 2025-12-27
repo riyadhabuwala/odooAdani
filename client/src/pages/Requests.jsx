@@ -184,7 +184,9 @@ const Requests = () => {
                                                 ))}
                                             </select>
                                         ) : (
-                                            <span className="font-black uppercase text-xs">{r.status}</span>
+                                            <span className="inline-block border-2 border-gray-900 px-3 py-2 font-black uppercase text-xs bg-white">
+                                                {r.status || '—'}
+                                            </span>
                                         )}
                                     </td>
                                     <td className="py-4 px-2">

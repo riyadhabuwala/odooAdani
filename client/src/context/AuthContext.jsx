@@ -21,6 +21,8 @@ export function AuthProvider({ children }) {
     const data = await loginRequest({ email, password });
     localStorage.setItem('mms_token', data.token);
     localStorage.setItem('mms_user', JSON.stringify(data.user));
+    // Trigger a one-time role popup after successful login.
+    sessionStorage.setItem('mms_show_role_popup', '1');
     setToken(data.token);
     setUser(data.user);
     return data.user;
@@ -30,6 +32,8 @@ export function AuthProvider({ children }) {
     const data = await signupRequest({ full_name, email, password });
     localStorage.setItem('mms_token', data.token);
     localStorage.setItem('mms_user', JSON.stringify(data.user));
+    // Trigger a one-time role popup after successful signup (auto-login).
+    sessionStorage.setItem('mms_show_role_popup', '1');
     setToken(data.token);
     setUser(data.user);
     return data.user;

@@ -1,17 +1,41 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { Link, Outlet, useLocation, useNavigate } from 'react-router-dom';
-import { CalendarDays, ClipboardList, LayoutDashboard, LogOut, Search, Settings2, Users } from 'lucide-react';
+import { CalendarDays, ClipboardList, LayoutDashboard, LogOut, Search, Settings2, Users, X } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 
 const Layout = () => {
     const { user, logout } = useAuth();
     const [globalQuery, setGlobalQuery] = useState('');
+    const [showRolePopup, setShowRolePopup] = useState(false);
     const navigate = useNavigate();
     const location = useLocation();
 
+    const role = String(user?.role || '').toLowerCase();
+
+    useEffect(() => {
+        const shouldShow = sessionStorage.getItem('mms_show_role_popup') === '1';
+        const hasRole = !!String(user?.role || '').trim();
+        if (shouldShow && hasRole) {
+            setShowRolePopup(true);
+        }
+    }, [user?.role]);
+
+    useEffect(() => {
+        if (!showRolePopup) return;
+        const t = window.setTimeout(() => {
+            setShowRolePopup(false);
+            sessionStorage.removeItem('mms_show_role_popup');
+        }, 4000);
+        return () => window.clearTimeout(t);
+    }, [showRolePopup]);
+
+    const dismissRolePopup = () => {
+        setShowRolePopup(false);
+        sessionStorage.removeItem('mms_show_role_popup');
+    };
+
     const navItems = useMemo(
         () => {
-            const role = String(user?.role || '').toLowerCase();
             if (role === 'admin') {
                 return [
                     { to: '/dashboard', label: 'Dashboard', icon: <LayoutDashboard size={20} /> },
@@ -31,11 +55,36 @@ const Layout = () => {
             // employee
             return [{ to: '/requests', label: 'Requests', icon: <ClipboardList size={20} /> }];
         },
-        [user?.role]
+        [role]
     );
 
     return (
         <div className="flex h-screen bg-gray-50 font-outfit">
+            {showRolePopup && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-6">
+                    <div className="sketch-card bg-white w-full max-w-xl border-4 border-gray-900">
+                        <div className="flex items-start justify-between gap-4">
+                            <div>
+                                <div className="text-xs font-black uppercase tracking-widest opacity-60">Logged in as</div>
+                                <div className="text-4xl font-black italic tracking-tight">
+                                    {String(user?.role || '').toUpperCase()}
+                                </div>
+                                <div className="mt-2 font-bold opacity-70">{user?.full_name || user?.email}</div>
+                            </div>
+                            <button
+                                type="button"
+                                className="sketch-button bg-white font-black"
+                                onClick={dismissRolePopup}
+                                aria-label="Close"
+                            >
+                                <X size={18} />
+                                CLOSE
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
             <aside className="w-64 border-r-2 border-gray-900 bg-white">
                 <div className="p-6 border-b-2 border-gray-900"><h1 className="text-2xl font-black italic tracking-tight font-sketch">MaintSync</h1></div>
                 <nav className="p-4 space-y-2">
@@ -68,6 +117,11 @@ const Layout = () => {
                         </div>
 
                         <div className="flex items-center gap-3">
+                            {role === 'employee' && (
+                                <Link to="/maintenance/new" className="sketch-button bg-maint-green font-black">
+                                    NEW REQUEST
+                                </Link>
+                            )}
                             <div className="hidden md:block text-right">
                                 <div className="text-xs font-black uppercase tracking-widest opacity-60">Signed In</div>
                                 <div className="font-black italic leading-tight">{user?.full_name || user?.email}</div>
