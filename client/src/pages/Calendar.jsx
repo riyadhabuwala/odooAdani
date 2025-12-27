@@ -164,13 +164,14 @@ const Calendar = () => {
                                     {dayReqs.slice(0, 4).map((r) => {
                                         const dt = new Date(r.scheduled_start || r.created_at);
                                         const time = Number.isNaN(dt.getTime()) ? '' : dt.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                                        const subject = r.equipment_name || r.work_center || '—';
                                         return (
                                             <div
                                                 key={r.id}
                                                 className={`p-1 border-2 border-gray-900 text-[10px] font-black uppercase truncate ${colorForRequest(r)} shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]`}
-                                                title={`${r.equipment_name} • ${r.status}`}
+                                                title={`${subject} • ${r.status}`}
                                             >
-                                                {time ? `${time} — ` : ''}{r.equipment_name}
+                                                {time ? `${time} — ` : ''}{subject}
                                             </div>
                                         );
                                     })}

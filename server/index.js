@@ -268,6 +268,129 @@ app.get('/api/users', authMiddleware, async (req, res) => {
     }
 });
 
+// --- Teams (MVP: 1 member per team) ---
+app.get('/api/teams', authMiddleware, requireDb, async (req, res) => {
+    try {
+        const result = await pool.query(
+            `SELECT
+                t.id,
+                t.name,
+                t.company,
+                t.created_at,
+                COALESCE(
+                    json_agg(
+                        json_build_object(
+                            'id', u.id,
+                            'full_name', u.full_name,
+                            'email', u.email,
+                            'role', u.role
+                        )
+                        ORDER BY u.full_name
+                    ) FILTER (WHERE u.id IS NOT NULL),
+                    '[]'::json
+                ) AS members
+             FROM teams t
+             LEFT JOIN team_members tm ON tm.team_id = t.id
+             LEFT JOIN users u ON u.id = tm.user_id
+             GROUP BY t.id
+             ORDER BY t.name ASC`
+        );
+
+        // Backward-compat: if older rows have member_user_id but no team_members entry yet,
+        // attach that user as the only member in response.
+        const legacy = await pool.query(
+            `SELECT t.id AS team_id, u.id, u.full_name, u.email, u.role
+             FROM teams t
+             JOIN users u ON u.id = t.member_user_id
+             WHERE NOT EXISTS (SELECT 1 FROM team_members tm WHERE tm.team_id = t.id)`
+        );
+        const legacyByTeam = new Map();
+        for (const row of legacy.rows) legacyByTeam.set(row.team_id, row);
+
+        const rows = (result.rows || []).map((t) => {
+            const legacyMember = legacyByTeam.get(t.id);
+            const members = Array.isArray(t.members) ? t.members : [];
+            if (members.length === 0 && legacyMember) {
+                return {
+                    ...t,
+                    members: [
+                        {
+                            id: legacyMember.id,
+                            full_name: legacyMember.full_name,
+                            email: legacyMember.email,
+                            role: legacyMember.role,
+                        },
+                    ],
+                };
+            }
+            return { ...t, members };
+        });
+
+        return res.json(rows);
+    } catch (err) {
+        return res.status(500).json({ error: err.message });
+    }
+});
+
+app.post('/api/teams', authMiddleware, requireDb, async (req, res) => {
+    const { name, company, member_user_id } = req.body || {};
+    const cleanName = String(name || '').trim();
+    const cleanCompany = String(company || '').trim();
+    const memberId = parseIntSafe(member_user_id);
+
+    if (!cleanName) return res.status(400).json({ error: 'name is required' });
+    if (!memberId) return res.status(400).json({ error: 'member_user_id is required' });
+
+    try {
+        // MVP assumption: member must be a technician
+        const member = await pool.query('SELECT id FROM users WHERE id = $1 AND role = $2', [memberId, 'technician']);
+        if (member.rows.length === 0) return res.status(400).json({ error: 'member_user_id must be a technician' });
+
+        const created = await pool.query(
+            'INSERT INTO teams (name, company, member_user_id) VALUES ($1, $2, $3) RETURNING id, name, company, member_user_id, created_at',
+            [cleanName, cleanCompany || null, memberId]
+        );
+
+        // Ensure the initial member is in team_members so filtering works.
+        try {
+            await pool.query('INSERT INTO team_members (team_id, user_id) VALUES ($1, $2) ON CONFLICT DO NOTHING', [created.rows[0].id, memberId]);
+        } catch {
+            // Ignore; team creation should still succeed.
+        }
+
+        return res.status(201).json(created.rows[0]);
+    } catch (err) {
+        if (String(err.message || '').toLowerCase().includes('duplicate')) {
+            return res.status(409).json({ error: 'Team name already exists' });
+        }
+        return res.status(500).json({ error: err.message });
+    }
+});
+
+app.post('/api/teams/:id/members', authMiddleware, requireDb, async (req, res) => {
+    const teamId = parseIntSafe(req.params.id);
+    const { user_id } = req.body || {};
+    const userId = parseIntSafe(user_id);
+    if (!teamId) return res.status(400).json({ error: 'Invalid team id' });
+    if (!userId) return res.status(400).json({ error: 'user_id is required' });
+
+    try {
+        const team = await pool.query('SELECT id FROM teams WHERE id = $1', [teamId]);
+        if (team.rows.length === 0) return res.status(404).json({ error: 'Team not found' });
+
+        const tech = await pool.query('SELECT id FROM users WHERE id = $1 AND role = $2', [userId, 'technician']);
+        if (tech.rows.length === 0) return res.status(400).json({ error: 'user_id must be a technician' });
+
+        await pool.query(
+            'INSERT INTO team_members (team_id, user_id) VALUES ($1, $2) ON CONFLICT DO NOTHING',
+            [teamId, userId]
+        );
+        return res.status(201).json({ ok: true });
+    } catch (err) {
+        return res.status(500).json({ error: err.message });
+    }
+});
+
 // --- Dashboard ---
 app.get('/api/dashboard', authMiddleware, async (req, res) => {
     if (!pool) {
@@ -284,10 +407,13 @@ app.get('/api/dashboard', authMiddleware, async (req, res) => {
                 mr.maintenance_type,
                 mr.priority,
                 mr.created_at,
+                mr.maintenance_for,
+                mr.work_center,
+                mr.team_name,
                 e.name AS equipment_name,
                 u.full_name AS technician_name
             FROM maintenance_requests mr
-            JOIN equipment e ON e.id = mr.equipment_id
+            LEFT JOIN equipment e ON e.id = mr.equipment_id
             LEFT JOIN users u ON u.id = mr.assigned_technician_id
             ORDER BY mr.created_at DESC
             LIMIT 10`
@@ -364,6 +490,8 @@ app.post('/api/equipment', authMiddleware, requireDb, async (req, res) => {
     const cleanSerial = String(serial_number || '').trim();
     if (!cleanName) return res.status(400).json({ error: 'Name is required' });
     if (!cleanSerial) return res.status(400).json({ error: 'Serial number is required' });
+    const techId = parseIntSafe(technician_id);
+    if (!techId) return res.status(400).json({ error: 'Technician is required' });
 
     try {
         const created = await pool.query(
@@ -375,7 +503,7 @@ app.post('/api/equipment', authMiddleware, requireDb, async (req, res) => {
                 employee_id ?? null,
                 department ?? null,
                 cleanSerial,
-                technician_id ?? null,
+                techId,
                 category ?? null,
                 company ?? null,
                 status ?? 'Active'
@@ -458,7 +586,7 @@ app.get('/api/requests', authMiddleware, requireDb, async (req, res) => {
                 e.name AS equipment_name,
                 tech.full_name AS technician_name
             FROM maintenance_requests mr
-            JOIN equipment e ON e.id = mr.equipment_id
+            LEFT JOIN equipment e ON e.id = mr.equipment_id
             LEFT JOIN users tech ON tech.id = mr.assigned_technician_id
             ${where}
             ORDER BY COALESCE(mr.scheduled_start, mr.created_at) ASC`,
@@ -490,7 +618,9 @@ app.post('/api/requests', authMiddleware, requireDb, async (req, res) => {
         maintenance_type,
         priority,
         status,
+        maintenance_for,
         work_center,
+        team_name,
         notes,
         instructions,
         scheduled_start,
@@ -499,25 +629,51 @@ app.post('/api/requests', authMiddleware, requireDb, async (req, res) => {
 
     const equipmentId = parseIntSafe(equipment_id);
     const prio = parseIntSafe(priority, 3);
-    if (!equipmentId) return res.status(400).json({ error: 'equipment_id is required' });
+
+    const normalizeMaintenanceFor = (value) => {
+        const s = String(value || '').trim().toLowerCase();
+        if (!s) return '';
+        if (s === 'work center') return 'work_center';
+        return s;
+    };
+
+    const maintenanceForRaw = normalizeMaintenanceFor(maintenance_for);
+    const maintenanceFor = maintenanceForRaw || (equipmentId ? 'equipment' : work_center ? 'work_center' : 'equipment');
+
+    if (maintenanceFor !== 'equipment' && maintenanceFor !== 'work_center') {
+        return res.status(400).json({ error: "maintenance_for must be 'equipment' or 'work_center'" });
+    }
+    if (maintenanceFor === 'equipment' && !equipmentId) {
+        return res.status(400).json({ error: 'equipment_id is required for maintenance_for=equipment' });
+    }
+    if (maintenanceFor === 'work_center' && !String(work_center || '').trim()) {
+        return res.status(400).json({ error: 'work_center is required for maintenance_for=work_center' });
+    }
+
     if (!maintenance_type) return res.status(400).json({ error: 'maintenance_type is required' });
     if (!Number.isFinite(prio) || prio < 1 || prio > 5) return res.status(400).json({ error: 'priority must be 1..5' });
+
+    const cleanTeamName = String(team_name || '').trim();
+    const finalEquipmentId = maintenanceFor === 'equipment' ? equipmentId : null;
+    const finalWorkCenter = maintenanceFor === 'work_center' ? String(work_center).trim() : null;
 
     try {
         const created = await pool.query(
             `INSERT INTO maintenance_requests
-                (equipment_id, requested_by_id, assigned_technician_id, maintenance_type, priority, status, work_center, notes, instructions, scheduled_start, scheduled_end)
+                (equipment_id, requested_by_id, assigned_technician_id, maintenance_type, priority, status, maintenance_for, work_center, team_name, notes, instructions, scheduled_start, scheduled_end)
              VALUES
-                ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
+                ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)
              RETURNING *`,
             [
-                equipmentId,
+                finalEquipmentId,
                 requested_by_id ?? null,
                 assigned_technician_id ?? null,
                 String(maintenance_type),
                 prio,
                 status ?? 'New Request',
-                work_center ?? null,
+                maintenanceFor,
+                finalWorkCenter,
+                cleanTeamName || null,
                 notes ?? null,
                 instructions ?? null,
                 scheduled_start ?? null,
@@ -542,7 +698,9 @@ app.put('/api/requests/:id', authMiddleware, requireDb, async (req, res) => {
         maintenance_type,
         priority,
         status,
+        maintenance_for,
         work_center,
+        team_name,
         notes,
         instructions,
         scheduled_start,
@@ -562,12 +720,14 @@ app.put('/api/requests/:id', authMiddleware, requireDb, async (req, res) => {
                 maintenance_type = COALESCE($4, maintenance_type),
                 priority = COALESCE($5, priority),
                 status = COALESCE($6, status),
-                work_center = COALESCE($7, work_center),
-                notes = COALESCE($8, notes),
-                instructions = COALESCE($9, instructions),
-                scheduled_start = $10,
-                scheduled_end = $11
-             WHERE id = $12
+                maintenance_for = COALESCE($7, maintenance_for),
+                work_center = COALESCE($8, work_center),
+                team_name = COALESCE($9, team_name),
+                notes = COALESCE($10, notes),
+                instructions = COALESCE($11, instructions),
+                scheduled_start = $12,
+                scheduled_end = $13
+             WHERE id = $14
              RETURNING *`,
             [
                 equipmentId,
@@ -576,7 +736,9 @@ app.put('/api/requests/:id', authMiddleware, requireDb, async (req, res) => {
                 maintenance_type ?? null,
                 prio,
                 status ?? null,
+                maintenance_for ?? null,
                 work_center ?? null,
+                team_name ?? null,
                 notes ?? null,
                 instructions ?? null,
                 scheduled_start ?? null,

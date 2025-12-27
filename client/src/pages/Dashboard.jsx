@@ -79,7 +79,7 @@ const Dashboard = () => {
                             activities.map((a) => (
                                 <tr key={a.id} className="border-b border-gray-200 last:border-b-0">
                                     <td className="py-4 px-2 font-black">#{a.id}</td>
-                                    <td className="py-4 px-2 font-bold">{a.equipment_name}</td>
+                                    <td className="py-4 px-2 font-bold">{a.equipment_name || a.work_center || '—'}</td>
                                     <td className="py-4 px-2 font-bold">{a.technician_name || '—'}</td>
                                     <td className="py-4 px-2 font-bold uppercase text-xs">{a.maintenance_type}</td>
                                     <td className="py-4 px-2 text-right">

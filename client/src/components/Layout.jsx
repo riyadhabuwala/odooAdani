@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import { Link, Outlet, useLocation, useNavigate } from 'react-router-dom';
-import { CalendarDays, ClipboardList, LayoutDashboard, LogOut, Search, Settings2 } from 'lucide-react';
+import { CalendarDays, ClipboardList, LayoutDashboard, LogOut, Search, Settings2, Users } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 
 const Layout = () => {
@@ -13,6 +13,7 @@ const Layout = () => {
         () => ([
             { to: '/dashboard', label: 'Dashboard', icon: <LayoutDashboard size={20} /> },
             { to: '/equipment', label: 'Equipment', icon: <Settings2 size={20} /> },
+            { to: '/teams', label: 'Teams', icon: <Users size={20} /> },
             { to: '/calendar', label: 'Calendar', icon: <CalendarDays size={20} /> },
             { to: '/maintenance/new', label: 'New Request', icon: <ClipboardList size={20} /> },
         ]),

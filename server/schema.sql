@@ -48,7 +48,9 @@ CREATE TABLE IF NOT EXISTS maintenance_requests (
     maintenance_type VARCHAR(20) NOT NULL,
     priority INTEGER NOT NULL DEFAULT 3,
     status VARCHAR(20) NOT NULL DEFAULT 'New Request',
+    maintenance_for VARCHAR(20) NOT NULL DEFAULT 'equipment',
     work_center VARCHAR(120),
+    team_name VARCHAR(120),
     notes TEXT,
     instructions TEXT,
     scheduled_start TIMESTAMP WITH TIME ZONE,
@@ -57,10 +59,15 @@ CREATE TABLE IF NOT EXISTS maintenance_requests (
     updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
+-- Allow work-center-only requests (equipment_id can be NULL)
+ALTER TABLE maintenance_requests ALTER COLUMN equipment_id DROP NOT NULL;
+
 ALTER TABLE maintenance_requests ADD COLUMN IF NOT EXISTS requested_by_id INTEGER;
 ALTER TABLE maintenance_requests ADD COLUMN IF NOT EXISTS assigned_technician_id INTEGER;
 ALTER TABLE maintenance_requests ADD COLUMN IF NOT EXISTS maintenance_type VARCHAR(20);
+ALTER TABLE maintenance_requests ADD COLUMN IF NOT EXISTS maintenance_for VARCHAR(20);
 ALTER TABLE maintenance_requests ADD COLUMN IF NOT EXISTS work_center VARCHAR(120);
+ALTER TABLE maintenance_requests ADD COLUMN IF NOT EXISTS team_name VARCHAR(120);
 ALTER TABLE maintenance_requests ADD COLUMN IF NOT EXISTS notes TEXT;
 ALTER TABLE maintenance_requests ADD COLUMN IF NOT EXISTS scheduled_start TIMESTAMP WITH TIME ZONE;
 ALTER TABLE maintenance_requests ADD COLUMN IF NOT EXISTS scheduled_end TIMESTAMP WITH TIME ZONE;
@@ -100,6 +107,35 @@ BEGIN
         EXECUTE 'ALTER TABLE maintenance_requests RENAME COLUMN request_date TO created_at';
     END IF;
 END $$;
+
+-- Teams (exactly 1 member for MVP)
+CREATE TABLE IF NOT EXISTS teams (
+    id SERIAL PRIMARY KEY,
+    name VARCHAR(120) NOT NULL UNIQUE,
+    company VARCHAR(120),
+    member_user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
+    created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+ALTER TABLE teams ADD COLUMN IF NOT EXISTS name VARCHAR(120);
+ALTER TABLE teams ADD COLUMN IF NOT EXISTS company VARCHAR(120);
+ALTER TABLE teams ADD COLUMN IF NOT EXISTS member_user_id INTEGER;
+ALTER TABLE teams ADD COLUMN IF NOT EXISTS created_at TIMESTAMP WITH TIME ZONE;
+
+CREATE INDEX IF NOT EXISTS idx_teams_member ON teams (member_user_id);
+
+-- Team members (many technicians per team)
+CREATE TABLE IF NOT EXISTS team_members (
+    team_id INTEGER NOT NULL REFERENCES teams(id) ON DELETE CASCADE,
+    user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (team_id, user_id)
+);
+
+ALTER TABLE team_members ADD COLUMN IF NOT EXISTS created_at TIMESTAMP WITH TIME ZONE;
+
+CREATE INDEX IF NOT EXISTS idx_team_members_team ON team_members (team_id);
+CREATE INDEX IF NOT EXISTS idx_team_members_user ON team_members (user_id);
 
 -- Basic performance
 CREATE INDEX IF NOT EXISTS idx_equipment_name ON equipment (name);

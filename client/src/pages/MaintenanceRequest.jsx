@@ -5,6 +5,10 @@ import { useAuth } from '../context/AuthContext';
 
 const PIPELINE = ['New Request', 'In Progress', 'Repaired', 'Scrap'];
 const WORK_CENTERS = ['IT', 'Electrical', 'Mechanical', 'Utilities'];
+const MAINTENANCE_FOR = [
+    { value: 'equipment', label: 'Equipment' },
+    { value: 'work_center', label: 'Work Center' },
+];
 
 const MaintenanceRequest = () => {
     const { user } = useAuth();
@@ -13,6 +17,7 @@ const MaintenanceRequest = () => {
     const [priority, setPriority] = useState(3);
     const [equipment, setEquipment] = useState([]);
     const [technicians, setTechnicians] = useState([]);
+    const [teams, setTeams] = useState([]);
     const [activeTab, setActiveTab] = useState('Notes');
     const [techOpen, setTechOpen] = useState(false);
     const [workCenterOpen, setWorkCenterOpen] = useState(false);
@@ -22,6 +27,8 @@ const MaintenanceRequest = () => {
     const [savedId, setSavedId] = useState(null);
 
     const [form, setForm] = useState({
+        maintenance_for: 'equipment',
+        team_id: '',
         equipment_id: '',
         assigned_technician_id: '',
         work_center: WORK_CENTERS[0],
@@ -35,13 +42,15 @@ const MaintenanceRequest = () => {
         (async () => {
             try {
                 setLoading(true);
-                const [eqRes, techRes] = await Promise.all([
+                const [eqRes, techRes, teamsRes] = await Promise.all([
                     api.get('/api/equipment'),
                     api.get('/api/users', { params: { role: 'technician' } }),
+                    api.get('/api/teams'),
                 ]);
                 if (!mounted) return;
                 setEquipment(eqRes.data || []);
                 setTechnicians(techRes.data || []);
+                setTeams(teamsRes.data || []);
             } catch (err) {
                 if (mounted) setError(err?.response?.data?.error || 'Failed to load form data');
             } finally {
@@ -63,19 +72,32 @@ const MaintenanceRequest = () => {
     const saveRequest = async () => {
         setError('');
         setSavedId(null);
+
+        const maintenanceFor = String(form.maintenance_for || 'equipment');
         const equipmentId = Number(form.equipment_id);
-        if (!equipmentId) return setError('Please select equipment');
+        const selectedTeam = teams.find((t) => String(t.id) === String(form.team_id));
+        const teamName = String(selectedTeam?.name || '').trim();
+
+        if (maintenanceFor === 'equipment') {
+            if (!equipmentId) return setError('Please select equipment');
+        } else if (maintenanceFor === 'work_center') {
+            if (!String(form.work_center || '').trim()) return setError('Please select work center');
+        } else {
+            return setError('Please select maintenance for');
+        }
 
         try {
             setSubmitting(true);
             const payload = {
-                equipment_id: equipmentId,
+                maintenance_for: maintenanceFor,
+                team_name: teamName || null,
+                equipment_id: maintenanceFor === 'equipment' ? equipmentId : null,
                 requested_by_id: user?.id || null,
                 assigned_technician_id: form.assigned_technician_id ? Number(form.assigned_technician_id) : null,
                 maintenance_type: maintenanceType,
                 priority,
                 status,
-                work_center: form.work_center,
+                work_center: maintenanceFor === 'work_center' ? form.work_center : null,
                 notes: form.notes,
                 instructions: form.instructions,
                 scheduled_start: form.scheduled_start ? new Date(form.scheduled_start).toISOString() : null,
@@ -176,21 +198,112 @@ const MaintenanceRequest = () => {
                         </div>
 
                         <div>
-                            <div className="text-xs font-black uppercase tracking-widest opacity-60 mb-2">Equipment</div>
-                            <div className="flex items-center gap-2 border-2 border-gray-900 p-2 bg-white">
-                                <select
-                                    value={form.equipment_id}
-                                    onChange={(e) => setForm({ ...form, equipment_id: e.target.value })}
-                                    className="flex-1 outline-none font-bold bg-white"
-                                >
-                                    <option value="">Select equipment…</option>
-                                    {equipment.map((e) => (
-                                        <option key={e.id} value={e.id}>{e.name} ({e.serial_number})</option>
-                                    ))}
-                                </select>
-                                <ChevronsUpDown size={16} className="opacity-60" />
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div>
+                                    <div className="text-xs font-black uppercase tracking-widest opacity-60 mb-2">Maintenance For</div>
+                                    <div className="flex items-center gap-2 border-2 border-gray-900 p-2 bg-white">
+                                        <select
+                                            value={form.maintenance_for}
+                                            onChange={(e) => {
+                                                const next = e.target.value;
+                                                setForm((prev) => ({
+                                                    ...prev,
+                                                    maintenance_for: next,
+                                                    equipment_id: next === 'equipment' ? prev.equipment_id : '',
+                                                }));
+                                                setTechOpen(false);
+                                                setWorkCenterOpen(false);
+                                            }}
+                                            className="flex-1 outline-none font-bold bg-white"
+                                        >
+                                            {MAINTENANCE_FOR.map((o) => (
+                                                <option key={o.value} value={o.value}>{o.label}</option>
+                                            ))}
+                                        </select>
+                                        <ChevronsUpDown size={16} className="opacity-60" />
+                                    </div>
+                                </div>
+
+                                <div>
+                                    <div className="text-xs font-black uppercase tracking-widest opacity-60 mb-2">Team Name</div>
+                                    <div className="flex items-center gap-2 border-2 border-gray-900 p-2 bg-white">
+                                        <select
+                                            value={form.team_id}
+                                            onChange={(e) => {
+                                                const teamId = e.target.value;
+                                                setForm((prev) => ({
+                                                    ...prev,
+                                                    team_id: teamId,
+                                                    assigned_technician_id: '',
+                                                }));
+                                                setTechOpen(false);
+                                            }}
+                                            className="flex-1 outline-none font-bold bg-white"
+                                        >
+                                            <option value="">Select team…</option>
+                                            {teams.map((t) => (
+                                                <option key={t.id} value={t.id}>{t.name}</option>
+                                            ))}
+                                        </select>
+                                        <ChevronsUpDown size={16} className="opacity-60" />
+                                    </div>
+                                </div>
                             </div>
                         </div>
+
+                        {form.maintenance_for === 'equipment' ? (
+                            <div>
+                                <div className="text-xs font-black uppercase tracking-widest opacity-60 mb-2">Equipment</div>
+                                <div className="flex items-center gap-2 border-2 border-gray-900 p-2 bg-white">
+                                    <select
+                                        value={form.equipment_id}
+                                        onChange={(e) => setForm({ ...form, equipment_id: e.target.value })}
+                                        className="flex-1 outline-none font-bold bg-white"
+                                    >
+                                        <option value="">Select equipment…</option>
+                                        {equipment.map((e) => (
+                                            <option key={e.id} value={e.id}>{e.name} ({e.serial_number})</option>
+                                        ))}
+                                    </select>
+                                    <ChevronsUpDown size={16} className="opacity-60" />
+                                </div>
+                            </div>
+                        ) : (
+                            <div>
+                                <div className="text-xs font-black uppercase tracking-widest opacity-60 mb-2">Work Center</div>
+                                <div className="relative">
+                                    <button
+                                        type="button"
+                                        className="w-full sketch-button justify-between font-black bg-white"
+                                        onClick={() => {
+                                            setWorkCenterOpen((v) => !v);
+                                            setTechOpen(false);
+                                        }}
+                                    >
+                                        <span className="flex-1 text-left">{form.work_center}</span>
+                                        <ChevronsUpDown size={16} />
+                                    </button>
+
+                                    {workCenterOpen && (
+                                        <div className="absolute z-10 mt-2 w-full border-2 border-gray-900 bg-white shadow-sketch">
+                                            {WORK_CENTERS.map((wc) => (
+                                                <button
+                                                    key={wc}
+                                                    type="button"
+                                                    className="w-full text-left px-3 py-2 font-bold hover:bg-gray-50 border-b border-gray-200 last:border-b-0"
+                                                    onClick={() => {
+                                                        setForm({ ...form, work_center: wc });
+                                                        setWorkCenterOpen(false);
+                                                    }}
+                                                >
+                                                    {wc}
+                                                </button>
+                                            ))}
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+                        )}
 
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                             <div>
@@ -222,7 +335,14 @@ const MaintenanceRequest = () => {
                                                 >
                                                     —
                                                 </button>
-                                                {technicians.map((t) => (
+                                                {(() => {
+                                                    const selected = teams.find((x) => String(x.id) === String(form.team_id));
+                                                    const members = selected?.members || [];
+                                                    const list = members.length
+                                                        ? technicians.filter((t) => members.some((m) => String(m.id) === String(t.id)))
+                                                        : technicians;
+                                                    return list;
+                                                })().map((t) => (
                                                     <button
                                                         key={t.id}
                                                         type="button"
@@ -233,41 +353,6 @@ const MaintenanceRequest = () => {
                                                         }}
                                                     >
                                                         {t.full_name}
-                                                    </button>
-                                                ))}
-                                            </div>
-                                        )}
-                                    </div>
-                            </div>
-
-                            <div>
-                                <div className="text-xs font-black uppercase tracking-widest opacity-60 mb-2">Work Center</div>
-                                    <div className="relative">
-                                        <button
-                                            type="button"
-                                            className="w-full sketch-button justify-between font-black bg-white"
-                                            onClick={() => {
-                                                setWorkCenterOpen((v) => !v);
-                                                setTechOpen(false);
-                                            }}
-                                        >
-                                            <span className="flex-1 text-left">{form.work_center}</span>
-                                            <ChevronsUpDown size={16} />
-                                        </button>
-
-                                        {workCenterOpen && (
-                                            <div className="absolute z-10 mt-2 w-full border-2 border-gray-900 bg-white shadow-sketch">
-                                                {WORK_CENTERS.map((wc) => (
-                                                    <button
-                                                        key={wc}
-                                                        type="button"
-                                                        className="w-full text-left px-3 py-2 font-bold hover:bg-gray-50 border-b border-gray-200 last:border-b-0"
-                                                        onClick={() => {
-                                                            setForm({ ...form, work_center: wc });
-                                                            setWorkCenterOpen(false);
-                                                        }}
-                                                    >
-                                                        {wc}
                                                     </button>
                                                 ))}
                                             </div>

@@ -7,6 +7,7 @@ import MaintenanceRequest from './pages/MaintenanceRequest';
 import Login from './pages/Login';
 import Signup from './pages/Signup';
 import Calendar from './pages/Calendar';
+import Teams from './pages/Teams';
 import RequireAuth from './components/RequireAuth.jsx';
 
 function App() {
@@ -26,6 +27,7 @@ function App() {
           <Route index element={<Navigate to="/dashboard" replace />} />
           <Route path="dashboard" element={<Dashboard />} />
           <Route path="equipment" element={<EquipmentList />} />
+          <Route path="teams" element={<Teams />} />
           <Route path="calendar" element={<Calendar />} />
           <Route path="maintenance/new" element={<MaintenanceRequest />} />
         </Route>

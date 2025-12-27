@@ -79,6 +79,7 @@ const EquipmentList = () => {
 
         if (!String(payload.name || '').trim()) return setError('Name is required');
         if (!String(payload.serial_number || '').trim()) return setError('Serial number is required');
+        if (!payload.technician_id) return setError('Technician is required');
 
         try {
             await api.post('/api/equipment', payload);
@@ -164,7 +165,7 @@ const EquipmentList = () => {
                         <div className="space-y-1">
                             <label className="text-[10px] font-black uppercase tracking-widest opacity-60">Technician</label>
                             <select className="w-full border-2 border-gray-900 p-2 font-bold outline-none bg-white" value={form.technician_id} onChange={(e) => setForm({ ...form, technician_id: e.target.value })}>
-                                <option value="">—</option>
+                                <option value="">Select technician…</option>
                                 {technicians.map((u) => (
                                     <option key={u.id} value={u.id}>{u.full_name}</option>
                                 ))}
