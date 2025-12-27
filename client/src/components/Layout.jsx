@@ -1,62 +1,90 @@
 import React from 'react';
-import { NavLink, Outlet } from 'react-router-dom';
-import { LayoutDashboard, Box, ClipboardList, Calendar, Search, Bell, User } from 'lucide-react';
+import { Link, Outlet, useLocation } from 'react-router-dom';
+import {
+    LayoutDashboard,
+    Settings2,
+    ClipboardList,
+    Calendar as CalendarIcon,
+    Bell,
+    User,
+    Search,
+    ChevronDown
+} from 'lucide-react';
 
 const Layout = () => {
+    const location = useLocation();
+
     const navItems = [
-        { name: 'Dashboard', path: '/dashboard', icon: LayoutDashboard },
-        { name: 'Equipment', path: '/equipment', icon: Box },
-        { name: 'Requests', path: '/request', icon: ClipboardList },
-        { name: 'Calendar', path: '/calendar', icon: Calendar },
+        { title: 'Dashboard', icon: <LayoutDashboard size={20} />, path: '/dashboard' },
+        { title: 'Equipment', icon: <Settings2 size={20} />, path: '/equipment' },
+        { title: 'Requests', icon: <ClipboardList size={20} />, path: '/maintenance/new' },
+        { title: 'Calendar', icon: <CalendarIcon size={20} />, path: '/calendar' },
     ];
 
     return (
-        <div className="flex h-screen bg-pastel-gray font-sketch">
+        <div className="flex h-screen bg-gray-50 overflow-hidden font-outfit">
             {/* Sidebar */}
-            <aside className="w-64 border-r-3 border-black bg-white flex flex-col">
-                <div className="p-6 border-b-3 border-black">
-                    <h1 className="text-2xl font-bold italic tracking-tighter">MaintSync.</h1>
+            <aside className="w-64 border-r-2 border-gray-900 bg-white flex flex-col">
+                <div className="p-6 border-b-2 border-gray-900">
+                    <h1 className="text-2xl font-black tracking-tighter">MaintSync</h1>
                 </div>
+
                 <nav className="flex-1 p-4 space-y-2">
                     {navItems.map((item) => (
-                        <NavLink
+                        <Link
                             key={item.path}
                             to={item.path}
-                            className={({ isActive }) =>
-                                `flex items-center space-x-3 p-3 rounded-lg border-2 border-transparent transition-all ${isActive ? 'bg-pastel-blue border-black shadow-sketch-sm translate-x-[2px] translate-y-[2px]' : 'hover:bg-slate-100'
-                                }`
-                            }
+                            className={`flex items-center gap-3 px-4 py-3 border-2 border-transparent transition-all ${location.pathname === item.path
+                                    ? 'bg-maint-blue border-gray-900 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]'
+                                    : 'hover:bg-gray-50'
+                                }`}
                         >
-                            <item.icon size={20} />
-                            <span className="font-bold">{item.name}</span>
-                        </NavLink>
+                            {item.icon}
+                            <span className="font-bold">{item.title}</span>
+                        </Link>
                     ))}
                 </nav>
+
+                <div className="p-4 border-t-2 border-gray-900">
+                    <div className="flex items-center gap-3 p-2">
+                        <div className="w-10 h-10 rounded-none border-2 border-gray-900 bg-maint-red group relative cursor-pointer overflow-hidden">
+                            <User className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2" size={20} />
+                        </div>
+                        <div className="flex-1 overflow-hidden">
+                            <p className="font-bold truncate text-sm">Riya Dhabuwala</p>
+                            <p className="text-xs text-gray-500 uppercase font-black">Admin</p>
+                        </div>
+                    </div>
+                </div>
             </aside>
 
             {/* Main Content */}
             <main className="flex-1 flex flex-col overflow-hidden">
                 {/* Top Navbar */}
-                <header className="h-16 border-b-3 border-black bg-white flex items-center justify-between px-6">
-                    <div className="flex items-center bg-slate-100 border-2 border-black px-3 py-1 w-96">
-                        <Search size={18} className="text-slate-500 mr-2" />
-                        <input type="text" placeholder="Search activities..." className="bg-transparent outline-none w-full" />
+                <header className="h-16 border-b-2 border-gray-900 bg-white flex items-center justify-between px-8 shrink-0">
+                    <div className="flex items-center bg-gray-100 border-2 border-gray-900 px-3 py-1.5 w-96">
+                        <Search size={18} className="text-gray-500" />
+                        <input
+                            type="text"
+                            placeholder="Search assets, requests..."
+                            className="bg-transparent border-none focus:ring-0 text-sm w-full font-medium ml-2 outline-none"
+                        />
                     </div>
-                    <div className="flex items-center space-x-4">
-                        <button className="p-2 border-2 border-transparent hover:border-black rounded-full transition-all">
-                            <Bell size={20} />
+
+                    <div className="flex items-center gap-6">
+                        <button className="relative">
+                            <Bell size={22} />
+                            <span className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 border-2 border-gray-900 rounded-full"></span>
                         </button>
-                        <div className="flex items-center space-x-2 p-1 pl-3 border-2 border-black rounded-full bg-pastel-yellow">
-                            <span className="font-bold text-sm">Riya</span>
-                            <div className="w-8 h-8 rounded-full border-2 border-black bg-white flex items-center justify-center">
-                                <User size={18} />
-                            </div>
+                        <div className="flex items-center gap-2 cursor-pointer border-2 border-gray-900 px-3 py-1.5 hover:bg-gray-50">
+                            <span className="font-bold text-sm uppercase">Adani Port</span>
+                            <ChevronDown size={16} />
                         </div>
                     </div>
                 </header>
 
-                {/* Content Area */}
-                <div className="flex-1 overflow-auto p-8">
+                {/* Dynamic Page Content */}
+                <div className="flex-1 overflow-y-auto p-8">
                     <Outlet />
                 </div>
             </main>

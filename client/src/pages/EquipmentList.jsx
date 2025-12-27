@@ -1,77 +1,79 @@
-import React, { useState, useEffect } from 'react';
-import axios from 'axios';
-import { Plus, Filter } from 'lucide-react';
+import React, { useState } from 'react';
+import { Plus, Search, Filter } from 'lucide-react';
 
 const EquipmentList = () => {
-    const [equipment, setEquipment] = useState([]);
-    const [loading, setLoading] = useState(true);
+    const [search, setSearch] = useState('');
 
-    useEffect(() => {
-        axios.get('http://localhost:5000/api/equipment')
-            .then(res => {
-                setEquipment(res.data);
-                setLoading(false);
-            });
-    }, []);
+    const equipment = [
+        { id: 1, name: "Dell Latitude 5420", sn: "SN29384", dept: "IT", emp: "Riya", tech: "John Doe", cat: "Laptop", status: "Active" },
+        { id: 2, name: "HP LaserJet Pro", sn: "SN11223", dept: "Admin", emp: "Sam", tech: "Jane Smith", cat: "Printer", status: "Active" },
+        { id: 3, name: "Cisco Router 2901", sn: "SN44556", dept: "IT", emp: "Floyd", tech: "John Doe", cat: "Network", status: "Active" },
+        { id: 4, name: "Epson L3150", sn: "SN77889", dept: "HR", emp: "Sarah", tech: "Jane Smith", cat: "Printer", status: "Active" },
+    ];
 
     return (
-        <div className="space-y-6">
-            <div className="flex items-center justify-between">
+        <div className="max-w-6xl mx-auto space-y-8">
+            <div className="flex justify-between items-end">
                 <div>
-                    <h2 className="text-3xl font-bold">Equipment Inventory</h2>
-                    <p className="font-bold text-slate-500 italic">Manage and track all company assets.</p>
+                    <h2 className="text-3xl font-black italic tracking-tighter">Equipment Inventory</h2>
+                    <p className="text-gray-500 font-bold uppercase text-sm mt-1">Managed assets for Adani Port</p>
                 </div>
-                <button className="btn-sketch bg-black text-white flex items-center space-x-2">
+                <button className="sketch-button bg-maint-blue font-black py-3">
                     <Plus size={20} />
-                    <span>New Equipment</span>
+                    NEW EQUIPMENT
                 </button>
             </div>
 
-            <div className="flex space-x-4 mb-4">
-                <div className="flex-1 bg-white border-3 border-black p-2 flex items-center">
-                    <input type="text" placeholder="Search by name, SN, or employee..." className="bg-transparent outline-none w-full font-bold px-2" />
+            <div className="sketch-card bg-white">
+                <div className="flex gap-4 mb-6">
+                    <div className="flex-1 flex items-center bg-gray-50 border-2 border-gray-900 px-4 py-2">
+                        <Search size={20} className="text-gray-500" />
+                        <input
+                            type="text"
+                            placeholder="Search by name, serial, or employee..."
+                            value={search}
+                            onChange={(e) => setSearch(e.target.value)}
+                            className="bg-transparent border-none focus:ring-0 w-full ml-3 font-bold outline-none"
+                        />
+                    </div>
+                    <button className="sketch-button px-6 font-bold uppercase">
+                        <Filter size={20} />
+                        Filter
+                    </button>
                 </div>
-                <button className="p-3 border-3 border-black bg-pastel-yellow hover:bg-yellow-200 transition-all">
-                    <Filter size={20} />
-                </button>
-            </div>
 
-            <div className="card-sketch bg-white overflow-hidden p-0">
-                <table className="w-full text-left border-collapse">
-                    <thead>
-                        <tr className="bg-slate-50 border-b-3 border-black">
-                            <th className="p-4 font-black uppercase text-xs">Name</th>
-                            <th className="p-4 font-black uppercase text-xs">Serial Number</th>
-                            <th className="p-4 font-black uppercase text-xs">Department</th>
-                            <th className="p-4 font-black uppercase text-xs">Employee</th>
-                            <th className="p-4 font-black uppercase text-xs">Technician</th>
-                            <th className="p-4 font-black uppercase text-xs">Category</th>
-                            <th className="p-4 font-black uppercase text-xs">Status</th>
-                        </tr>
-                    </thead>
-                    <tbody className="divide-y-3 border-black">
-                        {equipment.map((item) => (
-                            <tr key={item.id} className="hover:bg-slate-50 transition-colors">
-                                <td className="p-4 font-bold">{item.name}</td>
-                                <td className="p-4 font-mono text-sm">{item.serial_number}</td>
-                                <td className="p-4 text-sm font-bold">{item.department}</td>
-                                <td className="p-4 text-sm font-bold">{item.employee}</td>
-                                <td className="p-4 text-sm font-bold">{item.technician}</td>
-                                <td className="p-4">
-                                    <span className="px-2 py-1 bg-pastel-purple border-2 border-black text-xs font-black rounded uppercase">
-                                        {item.category}
-                                    </span>
-                                </td>
-                                <td className="p-4">
-                                    <div className="flex items-center space-x-2">
-                                        <div className="w-3 h-3 rounded-full bg-green-500 border border-black"></div>
-                                        <span className="font-bold text-sm tracking-tight">{item.status}</span>
-                                    </div>
-                                </td>
+                <div className="overflow-x-auto">
+                    <table className="w-full">
+                        <thead>
+                            <tr className="border-b-2 border-gray-900 text-left">
+                                <th className="pb-4 font-black uppercase text-sm px-2">Name</th>
+                                <th className="pb-4 font-black uppercase text-sm">Serial No.</th>
+                                <th className="pb-4 font-black uppercase text-sm">Department</th>
+                                <th className="pb-4 font-black uppercase text-sm">Employee</th>
+                                <th className="pb-4 font-black uppercase text-sm">Technician</th>
+                                <th className="pb-4 font-black uppercase text-sm">Category</th>
+                                <th className="pb-4 font-black uppercase text-sm text-right px-2">Status</th>
                             </tr>
-                        ))}
-                    </tbody>
-                </table>
+                        </thead>
+                        <tbody className="divide-y-2 divide-gray-100">
+                            {equipment.map((item) => (
+                                <tr key={item.id} className="hover:bg-gray-50 transition-colors">
+                                    <td className="py-4 px-2 font-black">{item.name}</td>
+                                    <td className="py-4 font-bold text-gray-500">{item.sn}</td>
+                                    <td className="py-4 font-medium italic">{item.dept}</td>
+                                    <td className="py-4 font-bold">{item.emp}</td>
+                                    <td className="py-4 font-medium opacity-70 italic">{item.tech}</td>
+                                    <td className="py-4 font-bold uppercase text-xs">{item.cat}</td>
+                                    <td className="py-4 text-right px-2">
+                                        <span className="sketch-tag bg-maint-green">
+                                            {item.status}
+                                        </span>
+                                    </td>
+                                </tr>
+                            ))}
+                        </tbody>
+                    </table>
+                </div>
             </div>
         </div>
     );

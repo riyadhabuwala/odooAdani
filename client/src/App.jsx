@@ -1,12 +1,12 @@
 import React from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
-import Login from './pages/Login';
-import Signup from './pages/Signup';
+import Layout from './components/Layout';
 import Dashboard from './pages/Dashboard';
 import EquipmentList from './pages/EquipmentList';
 import MaintenanceRequest from './pages/MaintenanceRequest';
 import Calendar from './pages/Calendar';
-import Layout from './components/Layout';
+import Login from './pages/Login';
+import Signup from './pages/Signup';
 
 function App() {
   return (
@@ -18,7 +18,7 @@ function App() {
           <Route index element={<Navigate to="/dashboard" replace />} />
           <Route path="dashboard" element={<Dashboard />} />
           <Route path="equipment" element={<EquipmentList />} />
-          <Route path="request" element={<MaintenanceRequest />} />
+          <Route path="maintenance/new" element={<MaintenanceRequest />} />
           <Route path="calendar" element={<Calendar />} />
         </Route>
       </Routes>

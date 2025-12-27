@@ -7,24 +7,17 @@ export default {
     theme: {
         extend: {
             colors: {
-                pastel: {
-                    red: '#ffb3ba',
-                    blue: '#bae1ff',
-                    green: '#baffc9',
-                    yellow: '#ffffba',
-                    purple: '#e0bbe4',
-                    gray: '#f5f5f5',
-                }
-            },
-            fontFamily: {
-                sketch: ['"Outfit"', 'sans-serif'], // Or a more sketch-like font if available
+                'maint-green': '#D1FAE5',
+                'maint-blue': '#DBEAFE',
+                'maint-red': '#FEE2E2',
+                'maint-yellow': '#FEF3C7',
             },
             boxShadow: {
-                'sketch': '4px 4px 0px 0px rgba(0,0,0,1)',
-                'sketch-sm': '2px 2px 0px 0px rgba(0,0,0,1)',
+                'sketch': '4px 4px 0px 0px rgba(0,0,0,0.1)',
+                'sketch-hover': '6px 6px 0px 0px rgba(0,0,0,0.15)',
             },
-            borderWidth: {
-                '3': '3px',
+            fontFamily: {
+                'outfit': ['Outfit', 'sans-serif'],
             }
         },
     },

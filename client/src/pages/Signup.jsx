@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
+import { Link } from 'react-router-dom';
+import { UserPlus, Mail, Lock, User, ShieldCheck } from 'lucide-react';
 
 const Signup = () => {
     const [formData, setFormData] = useState({
@@ -8,92 +9,118 @@ const Signup = () => {
         password: '',
         confirmPassword: ''
     });
-    const navigate = useNavigate();
 
-    const handleSignup = (e) => {
+    const [error, setError] = useState('');
+
+    const handleSubmit = (e) => {
         e.preventDefault();
-        // Validation: 8 chars, 1 uppercase, 1 special char
-        const passwordRegex = /^(?=.*[A-Z])(?=.*[!@#$%^&*])(?=.{8,})/;
-        if (!passwordRegex.test(formData.password)) {
-            alert("Password must be min 8 chars, 1 uppercase, 1 special char.");
-            return;
-        }
+        // Simple mock validation
         if (formData.password !== formData.confirmPassword) {
-            alert("Passwords do not match.");
+            setError('Passwords do not match');
             return;
         }
-        // In real app, call API
-        navigate('/login');
+        if (formData.password.length < 8) {
+            setError('Password must be at least 8 characters');
+            return;
+        }
+        setError('');
+        console.log('User signed up:', formData);
     };
 
     return (
-        <div className="flex h-screen font-sketch">
-            <div className="w-1/2 bg-pastel-green flex items-center justify-center p-12 border-r-3 border-black">
-                <div className="max-w-md text-center">
-                    <h1 className="text-6xl font-bold italic mb-6 tracking-tighter">MaintSync.</h1>
-                    <p className="text-xl font-bold leading-relaxed mb-8">
-                        Join the modern way of managing maintenance. Clean, fast, and professional.
-                    </p>
-                    <div className="bg-white border-3 border-black p-4 shadow-sketch inline-block transform rotate-1">
-                        <span className="font-bold italic">"For teams who value clarity."</span>
+        <div className="flex h-screen font-outfit">
+            {/* Left Design Section */}
+            <div className="hidden lg:flex flex-col justify-center items-center w-1/2 bg-maint-green border-r-4 border-gray-900 p-12">
+                <div className="max-w-md space-y-6">
+                    <div className="sketch-card bg-white rotate-1">
+                        <h1 className="text-6xl font-black italic tracking-tighter mb-4 leading-none">Join MaintSync.</h1>
+                        <p className="text-xl font-bold uppercase tracking-wide border-t-4 border-gray-900 pt-4">Streamline your facility operations today</p>
+                    </div>
+                    <div className="sketch-card bg-maint-blue -rotate-1 text-right">
+                        <p className="font-bold text-lg uppercase">Centralized. Transparent. Efficient.</p>
                     </div>
                 </div>
             </div>
-            <div className="w-1/2 bg-white flex items-center justify-center p-12">
-                <div className="w-full max-w-sm">
-                    <h2 className="text-3xl font-bold mb-8 underline decoration-pastel-purple decoration-8 underline-offset-4">Create Account</h2>
-                    <form className="space-y-4" onSubmit={handleSignup}>
-                        <div>
-                            <label className="block font-bold mb-1">Username</label>
-                            <input
-                                type="text"
-                                required
-                                className="input-sketch w-full"
-                                placeholder="riya_adani"
-                                value={formData.username}
-                                onChange={(e) => setFormData({ ...formData, username: e.target.value })}
-                            />
-                        </div>
-                        <div>
-                            <label className="block font-bold mb-1">Email Address</label>
-                            <input
-                                type="email"
-                                required
-                                className="input-sketch w-full"
-                                placeholder="riya@adani.com"
-                                value={formData.email}
-                                onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                            />
-                        </div>
-                        <div>
-                            <label className="block font-bold mb-1">Password</label>
-                            <input
-                                type="password"
-                                required
-                                className="input-sketch w-full"
-                                placeholder="********"
-                                value={formData.password}
-                                onChange={(e) => setFormData({ ...formData, password: e.target.value })}
-                            />
-                        </div>
-                        <div>
-                            <label className="block font-bold mb-1">Confirm Password</label>
-                            <input
-                                type="password"
-                                required
-                                className="input-sketch w-full"
-                                placeholder="********"
-                                value={formData.confirmPassword}
-                                onChange={(e) => setFormData({ ...formData, confirmPassword: e.target.value })}
-                            />
-                        </div>
-                        <button type="submit" className="btn-sketch w-full bg-black text-white hover:bg-slate-800 mt-4">
-                            Sign Up
-                        </button>
-                    </form>
-                    <p className="mt-8 text-center font-bold">
-                        Already have an account? <Link to="/login" className="text-blue-600 underline">Log in here</Link>
-                    </p>
+
+            {/* Right Signup Section */}
+            <div className="flex flex-col justify-center items-center w-full lg:w-1/2 bg-white p-8">
+                <div className="w-full max-w-sm space-y-8">
+                    <div className="sketch-card bg-white shadow-[8px_8px_0px_0px_rgba(0,0,0,1)]">
+                        <h2 className="text-2xl font-black uppercase tracking-tighter underline underline-offset-8 decoration-4 mb-8">Register Portal</h2>
+
+                        <form className="space-y-4" onSubmit={handleSubmit}>
+                            {error && (
+                                <div className="p-3 bg-red-100 border-2 border-red-900 text-red-900 font-bold text-xs flex items-center gap-2">
+                                    <ShieldCheck size={16} /> {error}
+                                </div>
+                            )}
+
+                            <div className="space-y-1">
+                                <label className="text-[10px] font-black uppercase tracking-widest text-gray-500">Full Name</label>
+                                <div className="flex items-center gap-3 border-2 border-gray-900 p-2">
+                                    <User size={18} />
+                                    <input
+                                        type="text"
+                                        placeholder="John Carter"
+                                        className="flex-1 outline-none font-bold placeholder:opacity-30 text-sm"
+                                        onChange={(e) => setFormData({ ...formData, username: e.target.value })}
+                                    />
+                                </div>
+                            </div>
+
+                            <div className="space-y-1">
+                                <label className="text-[10px] font-black uppercase tracking-widest text-gray-500">Email Address</label>
+                                <div className="flex items-center gap-3 border-2 border-gray-900 p-2">
+                                    <Mail size={18} />
+                                    <input
+                                        type="email"
+                                        placeholder="j.carter@adani.com"
+                                        className="flex-1 outline-none font-bold placeholder:opacity-30 text-sm"
+                                        onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                                    />
+                                </div>
+                            </div>
+
+                            <div className="space-y-1">
+                                <label className="text-[10px] font-black uppercase tracking-widest text-gray-500">Create Password</label>
+                                <div className="flex items-center gap-3 border-2 border-gray-900 p-2">
+                                    <Lock size={18} />
+                                    <input
+                                        type="password"
+                                        placeholder="••••••••"
+                                        className="flex-1 outline-none font-bold placeholder:opacity-30 text-sm"
+                                        onChange={(e) => setFormData({ ...formData, password: e.target.value })}
+                                    />
+                                </div>
+                            </div>
+
+                            <div className="space-y-1">
+                                <label className="text-[10px] font-black uppercase tracking-widest text-gray-500">Confirm Security Key</label>
+                                <div className="flex items-center gap-3 border-2 border-gray-900 p-2">
+                                    <ShieldCheck size={18} />
+                                    <input
+                                        type="password"
+                                        placeholder="••••••••"
+                                        className="flex-1 outline-none font-bold placeholder:opacity-30 text-sm"
+                                        onChange={(e) => setFormData({ ...formData, confirmPassword: e.target.value })}
+                                    />
+                                </div>
+                            </div>
+
+                            <button type="submit" className="w-full sketch-button bg-maint-blue justify-center py-3 mt-4 font-black">
+                                CREATE ACCOUNT <UserPlus size={20} className="ml-2" />
+                            </button>
+                        </form>
+                    </div>
+
+                    <div className="flex flex-col items-center gap-3">
+                        <p className="font-bold text-gray-500 uppercase text-[10px] tracking-widest text-center italic">
+                            Already registered? Just log in to your portal below
+                        </p>
+                        <Link to="/login" className="font-black text-sm underline decoration-2 underline-offset-4 hover:text-maint-blue transition-colors">
+                            SIGN IN TO EXISTING ACCOUNT
+                        </Link>
+                    </div>
                 </div>
             </div>
         </div>

@@ -27,9 +27,12 @@ const pool = new Pool({
 // Initialize Database
 const initDb = async () => {
     try {
-        const schema = fs.readFileSync(path.join(__dirname, 'schema.sql'), 'utf8');
-        await pool.query(schema);
-        console.log('Database initialized successfully');
+        const schemaPath = path.join(__dirname, 'schema.sql');
+        if (fs.existsSync(schemaPath)) {
+            const schema = fs.readFileSync(schemaPath, 'utf8');
+            await pool.query(schema);
+            console.log('Database initialized successfully');
+        }
     } catch (err) {
         console.error('Database initialization failed:', err.message);
     }
@@ -58,30 +61,6 @@ app.get('/api/stats', async (req, res) => {
         console.error(err);
         res.status(500).json({ error: err.message });
     }
-});
-
-// Mock Data for MVP
-let dashboardStats = {
-    criticalEquipment: 5,
-    technicianLoad: 75,
-    openRequests: 12
-};
-
-app.get('/api/stats', (req, res) => {
-    res.json(dashboardStats);
-});
-
-// Auth Routes (Mock)
-app.post('/api/auth/signup', (req, res) => {
-    const { username, email, password } = req.body;
-    // Mock validation and user creation
-    res.status(201).json({ message: "User created", user: { username, email, role: 'portal_user' } });
-});
-
-app.post('/api/auth/login', (req, res) => {
-    const { email, password } = req.body;
-    // Mock JWT exchange
-    res.json({ token: "mock-jwt-token", user: { username: "demo_user", email, role: 'portal_user' } });
 });
 
 // Equipment Routes
@@ -160,12 +139,6 @@ io.on('connection', async (socket) => {
         console.log('User disconnected');
     });
 });
-
-// Periodic update simulation
-setInterval(() => {
-    dashboardStats.openRequests += Math.floor(Math.random() * 3) - 1;
-    io.emit('dashboard_stats', dashboardStats);
-}, 10000);
 
 const PORT = process.env.PORT || 5000;
 server.listen(PORT, () => {

@@ -1,91 +1,85 @@
 import React, { useState } from 'react';
-import { ChevronLeft, ChevronRight } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Filter } from 'lucide-react';
 
 const Calendar = () => {
-    const [currentDate, setCurrentDate] = useState(new Date(2025, 11, 1)); // Dec 2025
-    const [view, setView] = useState('Month'); // Month, Week, Day
+    const [currentDate, setCurrentDate] = useState(new Date(2025, 11, 18));
 
     const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-    const monthName = currentDate.toLocaleString('default', { month: 'long' });
-    const year = currentDate.getFullYear();
-
-    // Mock data for maintenance blocks
-    const maintenanceBlocks = [
-        { day: 15, title: 'Server Check', type: 'Preventive', color: 'bg-pastel-blue' },
-        { day: 18, title: 'Printer Repair', type: 'Corrective', color: 'bg-pastel-red' },
-        { day: 22, title: 'Network Update', type: 'Preventive', color: 'bg-pastel-green' },
+    const mockRequests = [
+        { day: 15, title: 'Server Check', tech: 'John', color: 'bg-maint-blue' },
+        { day: 18, title: 'Printer Repair', tech: 'Sam', color: 'bg-maint-green' },
+        { day: 18, title: 'AC Filter', tech: 'Riya', color: 'bg-maint-red' },
+        { day: 22, title: 'Network Sync', tech: 'John', color: 'bg-maint-yellow' },
     ];
 
-    const getDaysInMonth = (year, month) => new Date(year, month + 1, 0).getDate();
-    const firstDayOfMonth = new Date(currentDate.getFullYear(), currentDate.getMonth(), 1).getDay();
-    const daysInMonth = getDaysInMonth(currentDate.getFullYear(), currentDate.getMonth());
-
-    const grid = [];
-    for (let i = 0; i < firstDayOfMonth; i++) grid.push(null);
-    for (let i = 1; i <= daysInMonth; i++) grid.push(i);
+    const generateDays = () => {
+        let daysArray = [];
+        for (let i = 1; i <= 31; i++) daysArray.push(i);
+        return daysArray;
+    };
 
     return (
-        <div className="space-y-6">
-            <div className="flex items-center justify-between">
-                <div>
-                    <h2 className="text-3xl font-bold flex items-center space-x-2">
-                        <span>Maintenance Schedule</span>
-                        <span className="text-slate-300 font-light">/</span>
-                        <span className="text-pastel-blue italic">{monthName} {year}</span>
-                    </h2>
+        <div className="max-w-6xl mx-auto space-y-8">
+            <div className="flex justify-between items-center">
+                <div className="flex items-center gap-6">
+                    <h2 className="text-4xl font-black tracking-tighter italic">December 2025</h2>
+                    <div className="flex border-2 border-gray-900">
+                        <button className="p-2 border-r-2 border-gray-900 hover:bg-gray-100"><ChevronLeft size={20} /></button>
+                        <button className="p-2 hover:bg-gray-100"><ChevronRight size={20} /></button>
+                    </div>
                 </div>
-                <div className="flex items-center bg-white border-2 border-black rounded-lg overflow-hidden shadow-sketch-sm">
-                    {['Month', 'Week', 'Day'].map(v => (
-                        <button
-                            key={v}
-                            onClick={() => setView(v)}
-                            className={`px-4 py-1 text-sm font-black ${view === v ? 'bg-black text-white' : 'hover:bg-slate-50'} ${v !== 'Day' ? 'border-r-2 border-black' : ''}`}
+                <div className="flex gap-4">
+                    <div className="flex border-2 border-gray-900 bg-white">
+                        <button className="px-4 py-2 font-black text-xs uppercase border-r-2 border-gray-900 bg-maint-blue shadow-inner">Month</button>
+                        <button className="px-4 py-2 font-black text-xs uppercase border-r-2 border-gray-900">Week</button>
+                        <button className="px-4 py-2 font-black text-xs uppercase">Day</button>
+                    </div>
+                    <button className="sketch-button py-2 px-4 font-bold text-xs">
+                        <Filter size={16} />
+                        ALL TECHNICIANS
+                    </button>
+                </div>
+            </div>
+
+            <div className="sketch-card bg-white p-0 overflow-hidden">
+                <div className="grid grid-cols-7 border-b-2 border-gray-900 bg-gray-50">
+                    {days.map(day => (
+                        <div key={day} className="p-4 text-center font-black uppercase text-xs tracking-widest border-r-2 last:border-r-0 border-gray-900">
+                            {day}
+                        </div>
+                    ))}
+                </div>
+
+                <div className="grid grid-cols-7 grid-rows-5">
+                    {generateDays().map(day => (
+                        <div
+                            key={day}
+                            className={`min-h-32 p-2 border-r-2 border-b-2 last:border-r-0 border-gray-900 relative ${day === 18 ? 'bg-maint-blue shadow-inner' : ''
+                                }`}
                         >
-                            {v}
-                        </button>
+                            <span className={`text-sm font-black ${day === 18 ? 'underline decoration-2' : 'opacity-40'}`}>
+                                {day}
+                            </span>
+
+                            <div className="mt-2 space-y-1">
+                                {mockRequests.filter(r => r.day === day).map((req, i) => (
+                                    <div key={i} className={`p-1 border-2 border-gray-900 text-[10px] font-black uppercase truncate ${req.color} shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]`}>
+                                        {req.title}
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
                     ))}
                 </div>
             </div>
 
-            <div className="card-sketch bg-white p-6">
-                <div className="flex items-center justify-between mb-8">
-                    <div className="flex items-center space-x-4">
-                        <button className="p-2 border-2 border-black hover:bg-slate-100 transition-all rounded">
-                            <ChevronLeft size={20} />
-                        </button>
-                        <button className="p-2 border-2 border-black hover:bg-slate-100 transition-all rounded">
-                            <ChevronRight size={20} />
-                        </button>
-                        <button className="font-black text-sm underline decoration-4 decoration-pastel-yellow underline-offset-4">Today</button>
+            <div className="flex gap-8 justify-center items-center py-4 opacity-70">
+                {['Corrective', 'Preventive', 'Inspection', 'Installation'].map((type, i) => (
+                    <div key={type} className="flex items-center gap-2">
+                        <div className={`w-3 h-3 border-2 border-gray-900 ${['bg-maint-red', 'bg-maint-green', 'bg-maint-blue', 'bg-maint-yellow'][i]}`}></div>
+                        <span className="text-[10px] font-black uppercase tracking-wider">{type}</span>
                     </div>
-                </div>
-
-                {/* Calendar Grid */}
-                <div className="grid grid-cols-7 border-t-2 border-l-2 border-black">
-                    {days.map(day => (
-                        <div key={day} className="p-4 border-r-2 border-b-2 border-black bg-slate-50 font-black text-center text-sm">
-                            {day}
-                        </div>
-                    ))}
-                    {grid.map((day, i) => (
-                        <div key={i} className={`min-h-[120px] p-2 border-r-2 border-b-2 border-black relative group hover:bg-slate-50 transition-all ${day === null ? 'bg-slate-50/50' : 'bg-white'}`}>
-                            {day && (
-                                <>
-                                    <span className={`font-black text-sm absolute top-2 right-2 w-7 h-7 flex items-center justify-center rounded-full border-2 ${day === 18 ? 'border-black bg-pastel-red' : 'border-transparent'}`}>
-                                        {day}
-                                    </span>
-                                    <div className="mt-8 space-y-1">
-                                        {maintenanceBlocks.filter(b => b.day === day).map((block, idx) => (
-                                            <div key={idx} className={`${block.color} border-2 border-black p-1 text-[10px] font-black rounded shadow-sketch-sm truncate cursor-pointer hover:translate-x-[1px] hover:translate-y-[1px] hover:shadow-none transition-all`}>
-                                                {block.title}
-                                            </div>
-                                        ))}
-                                    </div>
-                                </>
-                            )}
-                        </div>
-                    ))}
-                </div>
+                ))}
             </div>
         </div>
     );

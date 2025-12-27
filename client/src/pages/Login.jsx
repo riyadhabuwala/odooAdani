@@ -1,63 +1,72 @@
 import React, { useState } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
+import { Link } from 'react-router-dom';
+import { LogIn, Key, Mail, ShieldAlert } from 'lucide-react';
 
 const Login = () => {
-    const [email, setEmail] = useState('');
-    const [password, setPassword] = useState('');
-    const navigate = useNavigate();
-
-    const handleLogin = (e) => {
-        e.preventDefault();
-        // In real app, call API
-        navigate('/dashboard');
-    };
+    const [formData, setFormData] = useState({ email: '', password: '' });
 
     return (
-        <div className="flex h-screen font-sketch">
-            <div className="w-1/2 bg-pastel-blue flex items-center justify-center p-12 border-r-3 border-black">
-                <div className="max-w-md text-center">
-                    <h1 className="text-6xl font-bold italic mb-6 tracking-tighter">MaintSync.</h1>
-                    <p className="text-xl font-bold leading-relaxed mb-8">
-                        Simplify your equipment maintenance with our clean, sketch-like management system.
-                    </p>
-                    <div className="bg-white border-3 border-black p-4 shadow-sketch inline-block transform -rotate-1">
-                        <span className="font-bold italic">"Maintenance made human again."</span>
+        <div className="flex h-screen font-outfit">
+            {/* Left Design Section */}
+            <div className="hidden lg:flex flex-col justify-center items-center w-1/2 bg-maint-blue border-r-4 border-gray-900 p-12">
+                <div className="max-w-md space-y-6">
+                    <div className="sketch-card bg-white -rotate-2">
+                        <h1 className="text-6xl font-black italic tracking-tighter mb-4 leading-none">MaintSync.</h1>
+                        <p className="text-xl font-bold uppercase tracking-wide border-t-4 border-gray-900 pt-4">Maintenance Management for modern Industry</p>
+                    </div>
+                    <div className="sketch-card bg-maint-yellow rotate-1">
+                        <p className="font-bold text-lg">"The best maintenance is the one you predict, not the one you regret."</p>
                     </div>
                 </div>
             </div>
-            <div className="w-1/2 bg-white flex items-center justify-center p-12">
-                <div className="w-full max-w-sm">
-                    <h2 className="text-3xl font-bold mb-8 underline decoration-pastel-yellow decoration-8 underline-offset-4">Welcome Back</h2>
-                    <form className="space-y-6" onSubmit={handleLogin}>
-                        <div>
-                            <label className="block font-bold mb-2">Email Address</label>
-                            <input
-                                type="email"
-                                required
-                                className="input-sketch w-full"
-                                placeholder="riya@adani.com"
-                                value={email}
-                                onChange={(e) => setEmail(e.target.value)}
-                            />
-                        </div>
-                        <div>
-                            <label className="block font-bold mb-2">Password</label>
-                            <input
-                                type="password"
-                                required
-                                className="input-sketch w-full"
-                                placeholder="********"
-                                value={password}
-                                onChange={(e) => setPassword(e.target.value)}
-                            />
-                        </div>
-                        <button type="submit" className="btn-sketch w-full bg-black text-white hover:bg-slate-800">
-                            Sign In
-                        </button>
-                    </form>
-                    <p className="mt-8 text-center font-bold">
-                        Don't have an account? <Link to="/signup" className="text-blue-600 underline">Sign up here</Link>
-                    </p>
+
+            {/* Right Login Section */}
+            <div className="flex flex-col justify-center items-center w-full lg:w-1/2 bg-white p-8">
+                <div className="w-full max-w-sm space-y-8">
+                    <div className="text-center space-y-2 lg:hidden">
+                        <h1 className="text-4xl font-black italic tracking-tighter">MaintSync.</h1>
+                    </div>
+
+                    <div className="sketch-card bg-white shadow-[8px_8px_0px_0px_rgba(0,0,0,1)]">
+                        <h2 className="text-2xl font-black uppercase tracking-tighter underline underline-offset-8 decoration-4 mb-8">User Login</h2>
+
+                        <form className="space-y-6">
+                            <div className="space-y-2">
+                                <label className="text-sm font-black uppercase tracking-widest text-gray-500">Corporate Email</label>
+                                <div className="flex items-center gap-3 border-4 border-gray-900 p-3">
+                                    <Mail size={20} />
+                                    <input
+                                        type="email"
+                                        placeholder="name@adani.com"
+                                        className="flex-1 outline-none font-bold placeholder:opacity-30"
+                                    />
+                                </div>
+                            </div>
+
+                            <div className="space-y-2">
+                                <label className="text-sm font-black uppercase tracking-widest text-gray-500">Security Key</label>
+                                <div className="flex items-center gap-3 border-4 border-gray-900 p-3">
+                                    <Key size={20} />
+                                    <input
+                                        type="password"
+                                        placeholder="••••••••"
+                                        className="flex-1 outline-none font-bold placeholder:opacity-30"
+                                    />
+                                </div>
+                            </div>
+
+                            <button className="w-full sketch-button bg-maint-green justify-center py-4 font-black text-xl shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-1 hover:translate-y-1 transition-all">
+                                SIGN IN <LogIn size={24} className="ml-2" />
+                            </button>
+                        </form>
+                    </div>
+
+                    <div className="flex flex-col items-center gap-4 pt-4">
+                        <p className="font-bold text-gray-500 uppercase text-xs tracking-widest">New to the platform?</p>
+                        <Link to="/signup" className="sketch-button bg-maint-blue text-sm font-black">
+                            CREATE PORTAL ACCOUNT
+                        </Link>
+                    </div>
                 </div>
             </div>
         </div>
