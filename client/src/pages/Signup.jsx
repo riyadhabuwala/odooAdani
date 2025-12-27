@@ -92,7 +92,7 @@ const Signup = () => {
                                     <Mail size={18} />
                                     <input
                                         type="email"
-                                        placeholder="j.carter@adani.com"
+                                        placeholder="j.carter@mycompany.com"
                                         className="flex-1 outline-none font-bold placeholder:opacity-30 text-sm"
                                         onChange={(e) => setFormData({ ...formData, email: e.target.value })}
                                     />

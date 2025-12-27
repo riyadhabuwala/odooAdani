@@ -1,8 +1,11 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Plus } from 'lucide-react';
 import { api } from '../lib/api';
+import { useAuth } from '../context/AuthContext';
 
 const Teams = () => {
+    const { user } = useAuth();
+    const role = String(user?.role || '').toLowerCase();
     const [teams, setTeams] = useState([]);
     const [technicians, setTechnicians] = useState([]);
     const [loading, setLoading] = useState(true);
@@ -21,10 +24,11 @@ const Teams = () => {
         setLoading(true);
         setError('');
         try {
-            const [teamsRes, techRes] = await Promise.all([
-                api.get('/api/teams'),
-                api.get('/api/users', { params: { role: 'technician' } }),
-            ]);
+            const teamsReq = api.get('/api/teams');
+            const techReq = role === 'admin'
+                ? api.get('/api/users', { params: { role: 'technician' } })
+                : Promise.resolve({ data: [] });
+            const [teamsRes, techRes] = await Promise.all([teamsReq, techReq]);
             setTeams(teamsRes.data || []);
             setTechnicians(techRes.data || []);
         } catch (err) {
@@ -42,6 +46,8 @@ const Teams = () => {
     const onCreate = async (e) => {
         e.preventDefault();
         setError('');
+
+        if (role !== 'admin') return setError('Forbidden');
 
         const name = String(form.name || '').trim();
         const company = String(form.company || '').trim();
@@ -62,6 +68,7 @@ const Teams = () => {
     const onAddMember = async (e) => {
         e.preventDefault();
         setError('');
+        if (role !== 'admin') return setError('Forbidden');
         const teamId = addMember.team_id ? Number(addMember.team_id) : 0;
         const userId = addMember.user_id ? Number(addMember.user_id) : 0;
         if (!teamId) return setError('Select a team');
@@ -86,13 +93,15 @@ const Teams = () => {
                     <p className="text-xs font-bold uppercase tracking-widest opacity-50">Team name and 1 member</p>
                 </div>
 
-                <button
-                    type="button"
-                    className="sketch-button bg-maint-green font-black"
-                    onClick={() => setShowNew((v) => !v)}
-                >
-                    <Plus size={18} /> NEW
-                </button>
+                {role === 'admin' && (
+                    <button
+                        type="button"
+                        className="sketch-button bg-maint-green font-black"
+                        onClick={() => setShowNew((v) => !v)}
+                    >
+                        <Plus size={18} /> NEW
+                    </button>
+                )}
             </div>
 
             {error && (
@@ -101,7 +110,7 @@ const Teams = () => {
                 </div>
             )}
 
-            {showNew && (
+            {showNew && role === 'admin' && (
                 <div className="sketch-card bg-white">
                     <h3 className="font-black uppercase tracking-wider mb-4">New Team</h3>
                     <form className="grid grid-cols-1 md:grid-cols-2 gap-4" onSubmit={onCreate}>
@@ -146,42 +155,44 @@ const Teams = () => {
                 </div>
             )}
 
-            <div className="sketch-card bg-white">
-                <h3 className="font-black uppercase tracking-wider mb-4">Add Member</h3>
-                <form className="grid grid-cols-1 md:grid-cols-3 gap-4" onSubmit={onAddMember}>
-                    <div className="space-y-1">
-                        <label className="text-[10px] font-black uppercase tracking-widest opacity-60">Team</label>
-                        <select
-                            className="w-full border-2 border-gray-900 p-2 font-bold outline-none bg-white"
-                            value={addMember.team_id}
-                            onChange={(e) => setAddMember({ ...addMember, team_id: e.target.value })}
-                        >
-                            <option value="">Select team…</option>
-                            {rows.map((t) => (
-                                <option key={t.id} value={t.id}>{t.name}</option>
-                            ))}
-                        </select>
-                    </div>
-                    <div className="space-y-1">
-                        <label className="text-[10px] font-black uppercase tracking-widest opacity-60">Technician</label>
-                        <select
-                            className="w-full border-2 border-gray-900 p-2 font-bold outline-none bg-white"
-                            value={addMember.user_id}
-                            onChange={(e) => setAddMember({ ...addMember, user_id: e.target.value })}
-                        >
-                            <option value="">Select technician…</option>
-                            {technicians.map((t) => (
-                                <option key={t.id} value={t.id}>{t.full_name}</option>
-                            ))}
-                        </select>
-                    </div>
-                    <div className="flex items-end justify-end">
-                        <button type="submit" className="sketch-button bg-maint-green font-black w-full md:w-auto">
-                            ADD
-                        </button>
-                    </div>
-                </form>
-            </div>
+            {role === 'admin' && (
+                <div className="sketch-card bg-white">
+                    <h3 className="font-black uppercase tracking-wider mb-4">Add Member</h3>
+                    <form className="grid grid-cols-1 md:grid-cols-3 gap-4" onSubmit={onAddMember}>
+                        <div className="space-y-1">
+                            <label className="text-[10px] font-black uppercase tracking-widest opacity-60">Team</label>
+                            <select
+                                className="w-full border-2 border-gray-900 p-2 font-bold outline-none bg-white"
+                                value={addMember.team_id}
+                                onChange={(e) => setAddMember({ ...addMember, team_id: e.target.value })}
+                            >
+                                <option value="">Select team…</option>
+                                {rows.map((t) => (
+                                    <option key={t.id} value={t.id}>{t.name}</option>
+                                ))}
+                            </select>
+                        </div>
+                        <div className="space-y-1">
+                            <label className="text-[10px] font-black uppercase tracking-widest opacity-60">Technician</label>
+                            <select
+                                className="w-full border-2 border-gray-900 p-2 font-bold outline-none bg-white"
+                                value={addMember.user_id}
+                                onChange={(e) => setAddMember({ ...addMember, user_id: e.target.value })}
+                            >
+                                <option value="">Select technician…</option>
+                                {technicians.map((t) => (
+                                    <option key={t.id} value={t.id}>{t.full_name}</option>
+                                ))}
+                            </select>
+                        </div>
+                        <div className="flex items-end justify-end">
+                            <button type="submit" className="sketch-button bg-maint-green font-black w-full md:w-auto">
+                                ADD
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            )}
 
             <div className="sketch-card bg-white overflow-x-auto">
                 <table className="w-full text-left min-w-[720px]">

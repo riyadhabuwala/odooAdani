@@ -10,14 +10,28 @@ const Layout = () => {
     const location = useLocation();
 
     const navItems = useMemo(
-        () => ([
-            { to: '/dashboard', label: 'Dashboard', icon: <LayoutDashboard size={20} /> },
-            { to: '/equipment', label: 'Equipment', icon: <Settings2 size={20} /> },
-            { to: '/teams', label: 'Teams', icon: <Users size={20} /> },
-            { to: '/calendar', label: 'Calendar', icon: <CalendarDays size={20} /> },
-            { to: '/maintenance/new', label: 'New Request', icon: <ClipboardList size={20} /> },
-        ]),
-        []
+        () => {
+            const role = String(user?.role || '').toLowerCase();
+            if (role === 'admin') {
+                return [
+                    { to: '/dashboard', label: 'Dashboard', icon: <LayoutDashboard size={20} /> },
+                    { to: '/equipment', label: 'Equipment', icon: <Settings2 size={20} /> },
+                    { to: '/teams', label: 'Teams', icon: <Users size={20} /> },
+                    { to: '/users', label: 'Users', icon: <Users size={20} /> },
+                    { to: '/calendar', label: 'Calendar', icon: <CalendarDays size={20} /> },
+                    { to: '/requests', label: 'Requests', icon: <ClipboardList size={20} /> },
+                ];
+            }
+            if (role === 'technician') {
+                return [
+                    { to: '/requests', label: 'Requests', icon: <ClipboardList size={20} /> },
+                    { to: '/calendar', label: 'Calendar', icon: <CalendarDays size={20} /> },
+                ];
+            }
+            // employee
+            return [{ to: '/requests', label: 'Requests', icon: <ClipboardList size={20} /> }];
+        },
+        [user?.role]
     );
 
     return (

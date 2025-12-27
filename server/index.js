@@ -176,6 +176,32 @@ const authMiddleware = (req, res, next) => {
     }
 };
 
+const normalizeRole = (role) => {
+    const r = String(role || '').trim().toLowerCase();
+    // Backward compatibility: older signups used 'portal_user' meaning 'employee'.
+    if (r === 'portal_user') return 'employee';
+    if (r === 'admin' || r === 'technician' || r === 'employee') return r;
+    return '';
+};
+
+const requireRole = (allowedRoles) => {
+    const allowed = Array.isArray(allowedRoles) ? allowedRoles.map(normalizeRole).filter(Boolean) : [];
+    return (req, res, next) => {
+        const role = normalizeRole(req.user?.role);
+        if (!role) return res.status(401).json({ error: 'Invalid token role' });
+        if (allowed.length === 0) return next();
+        if (!allowed.includes(role)) {
+            return res.status(403).json({ error: 'Forbidden' });
+        }
+        return next();
+    };
+};
+
+const getUserIdFromJwt = (req) => {
+    const id = parseIntSafe(req.user?.sub);
+    return id || null;
+};
+
 app.get('/', (req, res) => {
     res.send('Maintenance System API is running.');
 });
@@ -201,11 +227,15 @@ app.post('/api/auth/signup', async (req, res) => {
 
         const passwordHash = await bcrypt.hash(String(password), 10);
         const created = await pool.query(
-            "INSERT INTO users (full_name, email, password_hash, role) VALUES ($1, $2, $3, 'portal_user') RETURNING id, full_name, email, role",
+            "INSERT INTO users (full_name, email, password_hash, role) VALUES ($1, $2, $3, 'employee') RETURNING id, full_name, email, role",
             [cleanName, cleanEmail, passwordHash]
         );
 
-        const user = created.rows[0];
+        const createdRow = created.rows[0];
+        const role = normalizeRole(createdRow.role);
+        if (!role) return res.status(500).json({ error: 'Created user has unsupported role' });
+
+        const user = { id: createdRow.id, full_name: createdRow.full_name, email: createdRow.email, role };
         const token = jwt.sign({ sub: user.id, email: user.email, role: user.role, full_name: user.full_name }, JWT_SECRET, { expiresIn: '7d' });
         return res.status(201).json({ token, user });
     } catch (err) {
@@ -231,7 +261,10 @@ app.post('/api/auth/login', async (req, res) => {
         const ok = await bcrypt.compare(String(password), userRow.password_hash);
         if (!ok) return res.status(401).json({ error: 'Invalid credentials' });
 
-        const user = { id: userRow.id, full_name: userRow.full_name, email: userRow.email, role: userRow.role };
+        const role = normalizeRole(userRow.role);
+        if (!role) return res.status(403).json({ error: 'User role is not supported. Contact admin.' });
+
+        const user = { id: userRow.id, full_name: userRow.full_name, email: userRow.email, role };
         const token = jwt.sign({ sub: user.id, email: user.email, role: user.role, full_name: user.full_name }, JWT_SECRET, { expiresIn: '7d' });
         return res.json({ token, user });
     } catch (err) {
@@ -240,12 +273,7 @@ app.post('/api/auth/login', async (req, res) => {
 });
 
 // Users (for smart selects)
-app.get('/api/users', authMiddleware, async (req, res) => {
-    if (!pool) {
-        return res.status(503).json({
-            error: 'Database not configured. Create server/.env and restart the server.',
-        });
-    }
+app.get('/api/users', authMiddleware, requireDb, requireRole(['admin']), async (req, res) => {
     const role = String(req.query.role || '').trim();
     const q = String(req.query.q || '').trim();
     const params = [];
@@ -262,15 +290,50 @@ app.get('/api/users', authMiddleware, async (req, res) => {
 
     try {
         const result = await pool.query(`SELECT id, full_name, email, role, department, company FROM users ${where} ORDER BY full_name ASC`, params);
-        return res.json(result.rows);
+        const rows = result.rows.map((r) => ({
+            ...r,
+            role: normalizeRole(r.role) || String(r.role || '').trim().toLowerCase(),
+        }));
+        return res.json(rows);
     } catch (err) {
         return res.status(500).json({ error: err.message });
     }
 });
 
-// --- Teams (MVP: 1 member per team) ---
-app.get('/api/teams', authMiddleware, requireDb, async (req, res) => {
+app.patch('/api/users/:id/role', authMiddleware, requireDb, requireRole(['admin']), async (req, res) => {
+    const userId = parseIntSafe(req.params.id);
+    if (!userId) return res.status(400).json({ error: 'Invalid user id' });
+
+    const nextRole = normalizeRole(req.body?.role);
+    if (!nextRole) return res.status(400).json({ error: 'Invalid role' });
+
     try {
+        const updated = await pool.query(
+            'UPDATE users SET role = $1 WHERE id = $2 RETURNING id, full_name, email, role, department, company',
+            [nextRole, userId]
+        );
+        if (updated.rows.length === 0) return res.status(404).json({ error: 'User not found' });
+        const row = updated.rows[0];
+        const normalized = { ...row, role: normalizeRole(row.role) || row.role };
+        return res.json(normalized);
+    } catch (err) {
+        return res.status(500).json({ error: err.message });
+    }
+});
+
+// --- Teams ---
+app.get('/api/teams', authMiddleware, requireDb, requireRole(['admin', 'technician']), async (req, res) => {
+    try {
+        const role = normalizeRole(req.user?.role);
+        const userId = getUserIdFromJwt(req);
+        const params = [];
+
+        let where = '';
+        if (role === 'technician') {
+            params.push(userId);
+            where = `WHERE tm.user_id = $1 OR t.member_user_id = $1`;
+        }
+
         const result = await pool.query(
             `SELECT
                 t.id,
@@ -292,17 +355,19 @@ app.get('/api/teams', authMiddleware, requireDb, async (req, res) => {
              FROM teams t
              LEFT JOIN team_members tm ON tm.team_id = t.id
              LEFT JOIN users u ON u.id = tm.user_id
+             ${where}
              GROUP BY t.id
-             ORDER BY t.name ASC`
+             ORDER BY t.name ASC`,
+            params
         );
 
         // Backward-compat: if older rows have member_user_id but no team_members entry yet,
         // attach that user as the only member in response.
-        const legacy = await pool.query(
+                const legacy = await pool.query(
             `SELECT t.id AS team_id, u.id, u.full_name, u.email, u.role
              FROM teams t
              JOIN users u ON u.id = t.member_user_id
-             WHERE NOT EXISTS (SELECT 1 FROM team_members tm WHERE tm.team_id = t.id)`
+                         WHERE NOT EXISTS (SELECT 1 FROM team_members tm WHERE tm.team_id = t.id)`
         );
         const legacyByTeam = new Map();
         for (const row of legacy.rows) legacyByTeam.set(row.team_id, row);
@@ -332,7 +397,31 @@ app.get('/api/teams', authMiddleware, requireDb, async (req, res) => {
     }
 });
 
-app.post('/api/teams', authMiddleware, requireDb, async (req, res) => {
+// Team picker options (safe for request creation)
+app.get('/api/team-options', authMiddleware, requireDb, requireRole(['admin', 'technician', 'employee']), async (req, res) => {
+    const role = normalizeRole(req.user?.role);
+    const userId = getUserIdFromJwt(req);
+    try {
+        if (role === 'technician' && userId) {
+            const result = await pool.query(
+                `SELECT DISTINCT t.id, t.name
+                 FROM teams t
+                 LEFT JOIN team_members tm ON tm.team_id = t.id
+                 WHERE tm.user_id = $1 OR t.member_user_id = $1
+                 ORDER BY t.name ASC`,
+                [userId]
+            );
+            return res.json(result.rows);
+        }
+
+        const result = await pool.query('SELECT id, name FROM teams ORDER BY name ASC');
+        return res.json(result.rows);
+    } catch (err) {
+        return res.status(500).json({ error: err.message });
+    }
+});
+
+app.post('/api/teams', authMiddleware, requireDb, requireRole(['admin']), async (req, res) => {
     const { name, company, member_user_id } = req.body || {};
     const cleanName = String(name || '').trim();
     const cleanCompany = String(company || '').trim();
@@ -367,7 +456,7 @@ app.post('/api/teams', authMiddleware, requireDb, async (req, res) => {
     }
 });
 
-app.post('/api/teams/:id/members', authMiddleware, requireDb, async (req, res) => {
+app.post('/api/teams/:id/members', authMiddleware, requireDb, requireRole(['admin']), async (req, res) => {
     const teamId = parseIntSafe(req.params.id);
     const { user_id } = req.body || {};
     const userId = parseIntSafe(user_id);
@@ -391,14 +480,90 @@ app.post('/api/teams/:id/members', authMiddleware, requireDb, async (req, res) =
     }
 });
 
-// --- Dashboard ---
-app.get('/api/dashboard', authMiddleware, async (req, res) => {
-    if (!pool) {
-        return res.status(503).json({
-            error: 'Database not configured. Create server/.env and restart the server.',
-        });
-    }
+app.delete('/api/teams/:id/members/:userId', authMiddleware, requireDb, requireRole(['admin']), async (req, res) => {
+    const teamId = parseIntSafe(req.params.id);
+    const userId = parseIntSafe(req.params.userId);
+    if (!teamId) return res.status(400).json({ error: 'Invalid team id' });
+    if (!userId) return res.status(400).json({ error: 'Invalid user id' });
     try {
+        const deleted = await pool.query('DELETE FROM team_members WHERE team_id = $1 AND user_id = $2 RETURNING team_id, user_id', [teamId, userId]);
+        if (deleted.rows.length === 0) return res.status(404).json({ error: 'Not found' });
+        return res.json({ ok: true });
+    } catch (err) {
+        return res.status(500).json({ error: err.message });
+    }
+});
+
+// --- Dashboard ---
+app.get('/api/dashboard', authMiddleware, requireDb, requireRole(['admin', 'technician']), async (req, res) => {
+    try {
+        const role = normalizeRole(req.user?.role);
+        const userId = getUserIdFromJwt(req);
+
+        if (role === 'technician' && userId) {
+            const teamsRes = await pool.query(
+                `SELECT DISTINCT t.name
+                 FROM teams t
+                 LEFT JOIN team_members tm ON tm.team_id = t.id
+                 WHERE tm.user_id = $1 OR t.member_user_id = $1`,
+                [userId]
+            );
+            const teamNames = teamsRes.rows.map((r) => r.name).filter(Boolean);
+
+            const criticalRes = await pool.query(
+                "SELECT COUNT(*)::int AS count FROM equipment WHERE technician_id = $1 AND status IN ('Down','Critical')",
+                [userId]
+            );
+
+            const openTeamRes = await pool.query(
+                `SELECT COUNT(*)::int AS count
+                 FROM maintenance_requests
+                 WHERE status NOT IN ('Repaired','Scrap')
+                   AND (
+                        assigned_technician_id = $1
+                        OR ($2::text[] IS NOT NULL AND team_name = ANY($2::text[]))
+                   )`,
+                [userId, teamNames.length ? teamNames : null]
+            );
+
+            const openAssignedRes = await pool.query(
+                `SELECT COUNT(*)::int AS count
+                 FROM maintenance_requests
+                 WHERE status NOT IN ('Repaired','Scrap')
+                   AND assigned_technician_id = $1`,
+                [userId]
+            );
+
+            const criticalEquipment = criticalRes.rows[0]?.count ?? 0;
+            const openRequests = openTeamRes.rows[0]?.count ?? 0;
+            const openAssigned = openAssignedRes.rows[0]?.count ?? 0;
+            const technicianLoad = openRequests > 0 ? Math.min(100, Math.round((openAssigned / openRequests) * 100)) : 0;
+
+            const activities = await pool.query(
+                `SELECT
+                    mr.id,
+                    mr.status,
+                    mr.maintenance_type,
+                    mr.priority,
+                    mr.created_at,
+                    mr.maintenance_for,
+                    mr.work_center,
+                    mr.team_name,
+                    e.name AS equipment_name,
+                    u.full_name AS technician_name
+                 FROM maintenance_requests mr
+                 LEFT JOIN equipment e ON e.id = mr.equipment_id
+                 LEFT JOIN users u ON u.id = mr.assigned_technician_id
+                 WHERE mr.assigned_technician_id = $1
+                    OR ($2::text[] IS NOT NULL AND mr.team_name = ANY($2::text[]))
+                 ORDER BY mr.created_at DESC
+                 LIMIT 10`,
+                [userId, teamNames.length ? teamNames : null]
+            );
+
+            return res.json({ stats: { criticalEquipment, technicianLoad, openRequests }, activities: activities.rows });
+        }
+
         const stats = await computeDashboardStats();
         const activities = await pool.query(
             `SELECT
@@ -425,7 +590,7 @@ app.get('/api/dashboard', authMiddleware, async (req, res) => {
 });
 
 // Backward-compatible stats endpoint
-app.get('/api/stats', async (req, res) => {
+app.get('/api/stats', authMiddleware, requireDb, requireRole(['admin', 'technician']), async (req, res) => {
     try {
         const stats = await computeDashboardStats();
         return res.json(stats);
@@ -435,7 +600,7 @@ app.get('/api/stats', async (req, res) => {
 });
 
 // --- Equipment CRUD ---
-app.get('/api/equipment', authMiddleware, requireDb, async (req, res) => {
+app.get('/api/equipment', authMiddleware, requireDb, requireRole(['admin', 'technician', 'employee']), async (req, res) => {
     const q = String(req.query.q || '').trim();
     const params = [];
     let where = 'WHERE 1=1';
@@ -472,7 +637,7 @@ app.get('/api/equipment', authMiddleware, requireDb, async (req, res) => {
     }
 });
 
-app.get('/api/equipment/:id', authMiddleware, requireDb, async (req, res) => {
+app.get('/api/equipment/:id', authMiddleware, requireDb, requireRole(['admin', 'technician', 'employee']), async (req, res) => {
     const id = parseIntSafe(req.params.id);
     if (!id) return res.status(400).json({ error: 'Invalid id' });
     try {
@@ -484,7 +649,7 @@ app.get('/api/equipment/:id', authMiddleware, requireDb, async (req, res) => {
     }
 });
 
-app.post('/api/equipment', authMiddleware, requireDb, async (req, res) => {
+app.post('/api/equipment', authMiddleware, requireDb, requireRole(['admin']), async (req, res) => {
     const { name, employee_id, department, serial_number, technician_id, category, company, status } = req.body || {};
     const cleanName = String(name || '').trim();
     const cleanSerial = String(serial_number || '').trim();
@@ -515,7 +680,7 @@ app.post('/api/equipment', authMiddleware, requireDb, async (req, res) => {
     }
 });
 
-app.put('/api/equipment/:id', authMiddleware, requireDb, async (req, res) => {
+app.put('/api/equipment/:id', authMiddleware, requireDb, requireRole(['admin']), async (req, res) => {
     const id = parseIntSafe(req.params.id);
     if (!id) return res.status(400).json({ error: 'Invalid id' });
     const { name, employee_id, department, serial_number, technician_id, category, company, status } = req.body || {};
@@ -551,7 +716,7 @@ app.put('/api/equipment/:id', authMiddleware, requireDb, async (req, res) => {
     }
 });
 
-app.delete('/api/equipment/:id', authMiddleware, requireDb, async (req, res) => {
+app.delete('/api/equipment/:id', authMiddleware, requireDb, requireRole(['admin']), async (req, res) => {
     const id = parseIntSafe(req.params.id);
     if (!id) return res.status(400).json({ error: 'Invalid id' });
     try {
@@ -564,9 +729,12 @@ app.delete('/api/equipment/:id', authMiddleware, requireDb, async (req, res) => 
 });
 
 // --- Maintenance Requests CRUD ---
-app.get('/api/requests', authMiddleware, requireDb, async (req, res) => {
+app.get('/api/requests', authMiddleware, requireDb, requireRole(['admin', 'technician', 'employee']), async (req, res) => {
     const from = req.query.from ? new Date(String(req.query.from)) : null;
     const to = req.query.to ? new Date(String(req.query.to)) : null;
+
+    const role = normalizeRole(req.user?.role);
+    const userId = getUserIdFromJwt(req);
 
     const params = [];
     let where = 'WHERE 1=1';
@@ -579,7 +747,35 @@ app.get('/api/requests', authMiddleware, requireDb, async (req, res) => {
         where += ` AND COALESCE(mr.scheduled_start, mr.created_at) <= $${params.length}`;
     }
 
+    // Data-level RBAC
+    if (role === 'employee' && userId) {
+        params.push(userId);
+        where += ` AND mr.requested_by_id = $${params.length}`;
+    }
+
     try {
+        if (role === 'technician' && userId) {
+            const teamsRes = await pool.query(
+                `SELECT DISTINCT t.name
+                 FROM teams t
+                 LEFT JOIN team_members tm ON tm.team_id = t.id
+                 WHERE tm.user_id = $1 OR t.member_user_id = $1`,
+                [userId]
+            );
+            const teamNames = teamsRes.rows.map((r) => r.name).filter(Boolean);
+
+            if (teamNames.length) {
+                params.push(teamNames);
+                const teamParamIdx = params.length;
+                params.push(userId);
+                const userParamIdx = params.length;
+                where += ` AND (mr.team_name = ANY($${teamParamIdx}::text[]) OR mr.assigned_technician_id = $${userParamIdx})`;
+            } else {
+                params.push(userId);
+                where += ` AND mr.assigned_technician_id = $${params.length}`;
+            }
+        }
+
         const result = await pool.query(
             `SELECT
                 mr.*, 
@@ -598,19 +794,53 @@ app.get('/api/requests', authMiddleware, requireDb, async (req, res) => {
     }
 });
 
-app.get('/api/requests/:id', authMiddleware, requireDb, async (req, res) => {
+app.get('/api/requests/:id', authMiddleware, requireDb, requireRole(['admin', 'technician', 'employee']), async (req, res) => {
     const id = parseIntSafe(req.params.id);
     if (!id) return res.status(400).json({ error: 'Invalid id' });
+
+    const role = normalizeRole(req.user?.role);
+    const userId = getUserIdFromJwt(req);
+
     try {
-        const result = await pool.query('SELECT * FROM maintenance_requests WHERE id = $1', [id]);
-        if (result.rows.length === 0) return res.status(404).json({ error: 'Not found' });
-        return res.json(result.rows[0]);
+        if (role === 'admin') {
+            const result = await pool.query('SELECT * FROM maintenance_requests WHERE id = $1', [id]);
+            if (result.rows.length === 0) return res.status(404).json({ error: 'Not found' });
+            return res.json(result.rows[0]);
+        }
+
+        if (role === 'employee' && userId) {
+            const result = await pool.query('SELECT * FROM maintenance_requests WHERE id = $1 AND requested_by_id = $2', [id, userId]);
+            if (result.rows.length === 0) return res.status(404).json({ error: 'Not found' });
+            return res.json(result.rows[0]);
+        }
+
+        if (role === 'technician' && userId) {
+            const teamsRes = await pool.query(
+                `SELECT DISTINCT t.name
+                 FROM teams t
+                 LEFT JOIN team_members tm ON tm.team_id = t.id
+                 WHERE tm.user_id = $1 OR t.member_user_id = $1`,
+                [userId]
+            );
+            const teamNames = teamsRes.rows.map((r) => r.name).filter(Boolean);
+
+            const result = await pool.query(
+                `SELECT * FROM maintenance_requests
+                 WHERE id = $1
+                   AND (assigned_technician_id = $2 OR ($3::text[] IS NOT NULL AND team_name = ANY($3::text[])))`,
+                [id, userId, teamNames.length ? teamNames : null]
+            );
+            if (result.rows.length === 0) return res.status(404).json({ error: 'Not found' });
+            return res.json(result.rows[0]);
+        }
+
+        return res.status(403).json({ error: 'Forbidden' });
     } catch (err) {
         return res.status(500).json({ error: err.message });
     }
 });
 
-app.post('/api/requests', authMiddleware, requireDb, async (req, res) => {
+app.post('/api/requests', authMiddleware, requireDb, requireRole(['admin', 'employee']), async (req, res) => {
     const {
         equipment_id,
         requested_by_id,
@@ -626,6 +856,9 @@ app.post('/api/requests', authMiddleware, requireDb, async (req, res) => {
         scheduled_start,
         scheduled_end
     } = req.body || {};
+
+    const role = normalizeRole(req.user?.role);
+    const userId = getUserIdFromJwt(req);
 
     const equipmentId = parseIntSafe(equipment_id);
     const prio = parseIntSafe(priority, 3);
@@ -657,6 +890,9 @@ app.post('/api/requests', authMiddleware, requireDb, async (req, res) => {
     const finalEquipmentId = maintenanceFor === 'equipment' ? equipmentId : null;
     const finalWorkCenter = maintenanceFor === 'work_center' ? String(work_center).trim() : null;
 
+    const finalRequestedById = role === 'employee' ? (userId ?? null) : (requested_by_id ?? null);
+    const finalAssignedTechId = role === 'employee' ? null : (assigned_technician_id ?? null);
+
     try {
         const created = await pool.query(
             `INSERT INTO maintenance_requests
@@ -666,8 +902,8 @@ app.post('/api/requests', authMiddleware, requireDb, async (req, res) => {
              RETURNING *`,
             [
                 finalEquipmentId,
-                requested_by_id ?? null,
-                assigned_technician_id ?? null,
+                finalRequestedById,
+                finalAssignedTechId,
                 String(maintenance_type),
                 prio,
                 status ?? 'New Request',
@@ -688,9 +924,44 @@ app.post('/api/requests', authMiddleware, requireDb, async (req, res) => {
     }
 });
 
-app.put('/api/requests/:id', authMiddleware, requireDb, async (req, res) => {
+app.put('/api/requests/:id', authMiddleware, requireDb, requireRole(['admin', 'technician']), async (req, res) => {
     const id = parseIntSafe(req.params.id);
     if (!id) return res.status(400).json({ error: 'Invalid id' });
+    const role = normalizeRole(req.user?.role);
+    const userId = getUserIdFromJwt(req);
+
+    // Technician: only update status and scheduled_end (duration)
+    if (role === 'technician' && userId) {
+        const { status, scheduled_end } = req.body || {};
+
+        try {
+            const teamsRes = await pool.query(
+                `SELECT DISTINCT t.name
+                 FROM teams t
+                 LEFT JOIN team_members tm ON tm.team_id = t.id
+                 WHERE tm.user_id = $1 OR t.member_user_id = $1`,
+                [userId]
+            );
+            const teamNames = teamsRes.rows.map((r) => r.name).filter(Boolean);
+
+            const updated = await pool.query(
+                `UPDATE maintenance_requests SET
+                    status = COALESCE($1, status),
+                    scheduled_end = $2
+                 WHERE id = $3
+                   AND (assigned_technician_id = $4 OR ($5::text[] IS NOT NULL AND team_name = ANY($5::text[])))
+                 RETURNING *`,
+                [status ?? null, scheduled_end ?? null, id, userId, teamNames.length ? teamNames : null]
+            );
+
+            if (updated.rows.length === 0) return res.status(404).json({ error: 'Not found' });
+            await emitDashboardStats();
+            return res.json(updated.rows[0]);
+        } catch (err) {
+            return res.status(500).json({ error: err.message });
+        }
+    }
+
     const {
         equipment_id,
         requested_by_id,
@@ -755,7 +1026,7 @@ app.put('/api/requests/:id', authMiddleware, requireDb, async (req, res) => {
     }
 });
 
-app.delete('/api/requests/:id', authMiddleware, requireDb, async (req, res) => {
+app.delete('/api/requests/:id', authMiddleware, requireDb, requireRole(['admin']), async (req, res) => {
     const id = parseIntSafe(req.params.id);
     if (!id) return res.status(400).json({ error: 'Invalid id' });
     try {

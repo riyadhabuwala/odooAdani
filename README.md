@@ -1,4 +1,4 @@
-# MaintSync (Odoo Adani) — Maintenance Management Web App
+# MaintSync (My Company (San Franscisco)) — Maintenance Management Web App
 
 A simple maintenance management system with:
 - Authentication (signup/login)

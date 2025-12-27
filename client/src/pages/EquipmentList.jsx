@@ -2,8 +2,11 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { Plus, Search } from 'lucide-react';
 import { useOutletContext } from 'react-router-dom';
 import { api } from '../lib/api';
+import { useAuth } from '../context/AuthContext';
 
 const EquipmentList = () => {
+    const { user } = useAuth();
+    const role = String(user?.role || '').toLowerCase();
     const { globalQuery } = useOutletContext();
     const [equipment, setEquipment] = useState([]);
     const [loading, setLoading] = useState(true);
@@ -28,11 +31,12 @@ const EquipmentList = () => {
         setLoading(true);
         setError('');
         try {
-            const [eqRes, empRes, techRes] = await Promise.all([
-                api.get('/api/equipment', { params: q ? { q } : {} }),
-                api.get('/api/users', { params: { role: 'employee' } }),
-                api.get('/api/users', { params: { role: 'technician' } }),
-            ]);
+            const eqReq = api.get('/api/equipment', { params: q ? { q } : {} });
+            const isAdmin = role === 'admin';
+            const empReq = isAdmin ? api.get('/api/users', { params: { role: 'employee' } }) : Promise.resolve({ data: [] });
+            const techReq = isAdmin ? api.get('/api/users', { params: { role: 'technician' } }) : Promise.resolve({ data: [] });
+
+            const [eqRes, empRes, techRes] = await Promise.all([eqReq, empReq, techReq]);
             setEquipment(eqRes.data || []);
             setEmployees(empRes.data || []);
             setTechnicians(techRes.data || []);
@@ -70,6 +74,8 @@ const EquipmentList = () => {
     const onCreate = async (e) => {
         e.preventDefault();
         setError('');
+
+        if (role !== 'admin') return setError('Forbidden');
 
         const payload = {
             ...form,
@@ -125,13 +131,15 @@ const EquipmentList = () => {
                     >
                         SEARCH
                     </button>
-                    <button
-                        type="button"
-                        className="sketch-button bg-maint-green font-black"
-                        onClick={() => setShowNew((v) => !v)}
-                    >
-                        <Plus size={18} /> NEW
-                    </button>
+                    {role === 'admin' && (
+                        <button
+                            type="button"
+                            className="sketch-button bg-maint-green font-black"
+                            onClick={() => setShowNew((v) => !v)}
+                        >
+                            <Plus size={18} /> NEW
+                        </button>
+                    )}
                 </div>
             </div>
 
@@ -141,7 +149,7 @@ const EquipmentList = () => {
                 </div>
             )}
 
-            {showNew && (
+            {showNew && role === 'admin' && (
                 <div className="sketch-card bg-white">
                     <h3 className="font-black uppercase tracking-wider mb-4">New Equipment</h3>
                     <form className="grid grid-cols-1 md:grid-cols-2 gap-4" onSubmit={onCreate}>

@@ -1,8 +1,11 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { api } from '../lib/api';
 import { connectSocket } from '../lib/socket';
+import { useAuth } from '../context/AuthContext';
 
 const Dashboard = () => {
+    const { user } = useAuth();
+    const role = String(user?.role || '').toLowerCase();
     const [stats, setStats] = useState({ criticalEquipment: 0, technicianLoad: 75, openRequests: 0 });
     const [activities, setActivities] = useState([]);
     const [loading, setLoading] = useState(true);
@@ -22,14 +25,15 @@ const Dashboard = () => {
             }
         })();
 
-        const socket = connectSocket();
-        socket.on('dashboard_stats', (data) => setStats(data));
+        // Only admins should receive global realtime stats.
+        const socket = role === 'admin' ? connectSocket() : null;
+        if (socket) socket.on('dashboard_stats', (data) => setStats(data));
 
         return () => {
             mounted = false;
-            socket.disconnect();
+            if (socket) socket.disconnect();
         };
-    }, []);
+    }, [role]);
 
     const statusBadge = useMemo(
         () => (status) => {

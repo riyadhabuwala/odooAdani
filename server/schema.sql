@@ -7,7 +7,7 @@ CREATE TABLE IF NOT EXISTS users (
     username VARCHAR(50) UNIQUE,
     email VARCHAR(100) UNIQUE NOT NULL,
     password_hash VARCHAR(255) NOT NULL,
-    role VARCHAR(20) NOT NULL DEFAULT 'portal_user',
+    role VARCHAR(20) NOT NULL DEFAULT 'employee',
     department VARCHAR(80),
     company VARCHAR(120),
     created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP
@@ -20,6 +20,9 @@ ALTER TABLE users ADD COLUMN IF NOT EXISTS department VARCHAR(80);
 ALTER TABLE users ADD COLUMN IF NOT EXISTS company VARCHAR(120);
 ALTER TABLE users ADD COLUMN IF NOT EXISTS role VARCHAR(20);
 ALTER TABLE users ADD COLUMN IF NOT EXISTS created_at TIMESTAMP WITH TIME ZONE;
+
+-- Ensure a consistent default role for new rows in existing DBs
+ALTER TABLE users ALTER COLUMN role SET DEFAULT 'employee';
 
 CREATE TABLE IF NOT EXISTS equipment (
     id SERIAL PRIMARY KEY,

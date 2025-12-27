@@ -8,7 +8,10 @@ import Login from './pages/Login';
 import Signup from './pages/Signup';
 import Calendar from './pages/Calendar';
 import Teams from './pages/Teams';
+import Requests from './pages/Requests';
+import Users from './pages/Users';
 import RequireAuth from './components/RequireAuth.jsx';
+import RequireRole from './components/RequireRole.jsx';
 
 function App() {
   return (
@@ -25,11 +28,62 @@ function App() {
           }
         >
           <Route index element={<Navigate to="/dashboard" replace />} />
-          <Route path="dashboard" element={<Dashboard />} />
-          <Route path="equipment" element={<EquipmentList />} />
-          <Route path="teams" element={<Teams />} />
-          <Route path="calendar" element={<Calendar />} />
-          <Route path="maintenance/new" element={<MaintenanceRequest />} />
+          <Route
+            path="dashboard"
+            element={
+              <RequireRole allowedRoles={["admin", "technician"]}>
+                <Dashboard />
+              </RequireRole>
+            }
+          />
+          <Route
+            path="equipment"
+            element={
+              <RequireRole allowedRoles={["admin", "technician", "employee"]}>
+                <EquipmentList />
+              </RequireRole>
+            }
+          />
+          <Route
+            path="teams"
+            element={
+              <RequireRole allowedRoles={["admin", "technician"]}>
+                <Teams />
+              </RequireRole>
+            }
+          />
+          <Route
+            path="users"
+            element={
+              <RequireRole allowedRoles={["admin"]}>
+                <Users />
+              </RequireRole>
+            }
+          />
+          <Route
+            path="calendar"
+            element={
+              <RequireRole allowedRoles={["admin", "technician"]}>
+                <Calendar />
+              </RequireRole>
+            }
+          />
+          <Route
+            path="requests"
+            element={
+              <RequireRole allowedRoles={["admin", "technician", "employee"]}>
+                <Requests />
+              </RequireRole>
+            }
+          />
+          <Route
+            path="maintenance/new"
+            element={
+              <RequireRole allowedRoles={["admin", "employee"]}>
+                <MaintenanceRequest />
+              </RequireRole>
+            }
+          />
         </Route>
       </Routes>
     </Router>

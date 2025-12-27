@@ -12,6 +12,7 @@ const MAINTENANCE_FOR = [
 
 const MaintenanceRequest = () => {
     const { user } = useAuth();
+    const role = String(user?.role || '').toLowerCase();
     const [status, setStatus] = useState('New Request');
     const [maintenanceType, setMaintenanceType] = useState('Corrective');
     const [priority, setPriority] = useState(3);
@@ -42,15 +43,17 @@ const MaintenanceRequest = () => {
         (async () => {
             try {
                 setLoading(true);
-                const [eqRes, techRes, teamsRes] = await Promise.all([
-                    api.get('/api/equipment'),
-                    api.get('/api/users', { params: { role: 'technician' } }),
-                    api.get('/api/teams'),
-                ]);
+                const eqReq = api.get('/api/equipment');
+                const teamsReq = role === 'admin' ? api.get('/api/teams') : api.get('/api/team-options');
+                const techReq = role === 'admin'
+                    ? api.get('/api/users', { params: { role: 'technician' } })
+                    : Promise.resolve({ data: [] });
+
+                const [eqRes, teamsRes, techRes] = await Promise.all([eqReq, teamsReq, techReq]);
                 if (!mounted) return;
                 setEquipment(eqRes.data || []);
-                setTechnicians(techRes.data || []);
                 setTeams(teamsRes.data || []);
+                setTechnicians(techRes.data || []);
             } catch (err) {
                 if (mounted) setError(err?.response?.data?.error || 'Failed to load form data');
             } finally {
@@ -60,7 +63,7 @@ const MaintenanceRequest = () => {
         return () => {
             mounted = false;
         };
-    }, []);
+    }, [role]);
 
     const stageIndex = useMemo(() => PIPELINE.indexOf(status), [status]);
 
@@ -305,61 +308,63 @@ const MaintenanceRequest = () => {
                             </div>
                         )}
 
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            <div>
-                                <div className="text-xs font-black uppercase tracking-widest opacity-60 mb-2">Technician</div>
-                                    <div className="relative">
-                                        <button
-                                            type="button"
-                                            className="w-full sketch-button justify-between font-black bg-white"
-                                            onClick={() => {
-                                                setTechOpen((v) => !v);
-                                                setWorkCenterOpen(false);
-                                            }}
-                                        >
-                                            <span className="flex-1 text-left">
-                                                {technicians.find((t) => String(t.id) === String(form.assigned_technician_id))?.full_name || 'Select…'}
-                                            </span>
-                                            <ChevronsUpDown size={16} />
-                                        </button>
+                        {role === 'admin' && (
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div>
+                                    <div className="text-xs font-black uppercase tracking-widest opacity-60 mb-2">Technician</div>
+                                        <div className="relative">
+                                            <button
+                                                type="button"
+                                                className="w-full sketch-button justify-between font-black bg-white"
+                                                onClick={() => {
+                                                    setTechOpen((v) => !v);
+                                                    setWorkCenterOpen(false);
+                                                }}
+                                            >
+                                                <span className="flex-1 text-left">
+                                                    {technicians.find((t) => String(t.id) === String(form.assigned_technician_id))?.full_name || 'Select…'}
+                                                </span>
+                                                <ChevronsUpDown size={16} />
+                                            </button>
 
-                                        {techOpen && (
-                                            <div className="absolute z-10 mt-2 w-full border-2 border-gray-900 bg-white shadow-sketch">
-                                                <button
-                                                    type="button"
-                                                    className="w-full text-left px-3 py-2 font-bold hover:bg-gray-50 border-b border-gray-200"
-                                                    onClick={() => {
-                                                        setForm({ ...form, assigned_technician_id: '' });
-                                                        setTechOpen(false);
-                                                    }}
-                                                >
-                                                    —
-                                                </button>
-                                                {(() => {
-                                                    const selected = teams.find((x) => String(x.id) === String(form.team_id));
-                                                    const members = selected?.members || [];
-                                                    const list = members.length
-                                                        ? technicians.filter((t) => members.some((m) => String(m.id) === String(t.id)))
-                                                        : technicians;
-                                                    return list;
-                                                })().map((t) => (
+                                            {techOpen && (
+                                                <div className="absolute z-10 mt-2 w-full border-2 border-gray-900 bg-white shadow-sketch">
                                                     <button
-                                                        key={t.id}
                                                         type="button"
-                                                        className="w-full text-left px-3 py-2 font-bold hover:bg-gray-50 border-b border-gray-200 last:border-b-0"
+                                                        className="w-full text-left px-3 py-2 font-bold hover:bg-gray-50 border-b border-gray-200"
                                                         onClick={() => {
-                                                            setForm({ ...form, assigned_technician_id: String(t.id) });
+                                                            setForm({ ...form, assigned_technician_id: '' });
                                                             setTechOpen(false);
                                                         }}
                                                     >
-                                                        {t.full_name}
+                                                        —
                                                     </button>
-                                                ))}
-                                            </div>
-                                        )}
-                                    </div>
+                                                    {(() => {
+                                                        const selected = teams.find((x) => String(x.id) === String(form.team_id));
+                                                        const members = selected?.members || [];
+                                                        const list = members.length
+                                                            ? technicians.filter((t) => members.some((m) => String(m.id) === String(t.id)))
+                                                            : technicians;
+                                                        return list;
+                                                    })().map((t) => (
+                                                        <button
+                                                            key={t.id}
+                                                            type="button"
+                                                            className="w-full text-left px-3 py-2 font-bold hover:bg-gray-50 border-b border-gray-200 last:border-b-0"
+                                                            onClick={() => {
+                                                                setForm({ ...form, assigned_technician_id: String(t.id) });
+                                                                setTechOpen(false);
+                                                            }}
+                                                        >
+                                                            {t.full_name}
+                                                        </button>
+                                                    ))}
+                                                </div>
+                                            )}
+                                        </div>
+                                </div>
                             </div>
-                        </div>
+                        )}
                     </div>
 
                     <div className="space-y-4">
