@@ -740,11 +740,11 @@ app.get('/api/requests', authMiddleware, requireDb, requireRole(['admin', 'techn
     let where = 'WHERE 1=1';
     if (from && !Number.isNaN(from.getTime())) {
         params.push(from.toISOString());
-        where += ` AND COALESCE(mr.scheduled_start, mr.created_at) >= $${params.length}`;
+        where += ` AND COALESCE(mr.scheduled_start, mr.scheduled_end, mr.created_at) >= $${params.length}`;
     }
     if (to && !Number.isNaN(to.getTime())) {
         params.push(to.toISOString());
-        where += ` AND COALESCE(mr.scheduled_start, mr.created_at) <= $${params.length}`;
+        where += ` AND COALESCE(mr.scheduled_start, mr.scheduled_end, mr.created_at) <= $${params.length}`;
     }
 
     // Data-level RBAC
@@ -785,7 +785,7 @@ app.get('/api/requests', authMiddleware, requireDb, requireRole(['admin', 'techn
             LEFT JOIN equipment e ON e.id = mr.equipment_id
             LEFT JOIN users tech ON tech.id = mr.assigned_technician_id
             ${where}
-            ORDER BY COALESCE(mr.scheduled_start, mr.created_at) ASC`,
+            ORDER BY COALESCE(mr.scheduled_start, mr.scheduled_end, mr.created_at) ASC`,
             params
         );
         return res.json(result.rows);

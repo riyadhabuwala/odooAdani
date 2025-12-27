@@ -11,6 +11,7 @@ const Requests = () => {
     const role = String(user?.role || '').toLowerCase();
 
     const [requests, setRequests] = useState([]);
+    const [technicians, setTechnicians] = useState([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState('');
     const [savingId, setSavingId] = useState(null);
@@ -33,8 +34,24 @@ const Requests = () => {
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
+    useEffect(() => {
+        const loadTechnicians = async () => {
+            if (role !== 'admin') return;
+            try {
+                const res = await api.get('/api/users', { params: { role: 'technician' } });
+                setTechnicians(res.data || []);
+            } catch {
+                // Keep the page usable even if technicians cannot be loaded.
+                setTechnicians([]);
+            }
+        };
+
+        loadTechnicians();
+    }, [role]);
+
     const canCreate = role === 'admin' || role === 'employee';
     const canUpdate = role === 'admin' || role === 'technician';
+    const canAssignTechnician = role === 'admin';
 
     const rows = useMemo(() => {
         return (requests || []).map((r) => {
@@ -116,7 +133,41 @@ const Requests = () => {
                                     <td className="py-4 px-2 font-black">#{r.id}</td>
                                     <td className="py-4 px-2 font-bold">{r.subject}</td>
                                     <td className="py-4 px-2 font-bold">{r.team_name || '—'}</td>
-                                    <td className="py-4 px-2 font-bold">{r.technician_name || '—'}</td>
+                                    <td className="py-4 px-2">
+                                        {canAssignTechnician ? (
+                                            <select
+                                                className="border-2 border-gray-900 p-2 font-bold outline-none bg-white min-w-[220px]"
+                                                value={r.assigned_technician_id ? String(r.assigned_technician_id) : ''}
+                                                onChange={(e) => {
+                                                    const raw = e.target.value;
+                                                    const nextId = raw ? Number(raw) : null;
+                                                    const nextName = nextId
+                                                        ? (technicians.find((t) => t.id === nextId)?.full_name || null)
+                                                        : null;
+                                                    setRequests((prev) =>
+                                                        prev.map((x) =>
+                                                            x.id === r.id
+                                                                ? {
+                                                                    ...x,
+                                                                    assigned_technician_id: nextId,
+                                                                    technician_name: nextName,
+                                                                }
+                                                                : x
+                                                        )
+                                                    );
+                                                }}
+                                            >
+                                                <option value="">—</option>
+                                                {technicians.map((t) => (
+                                                    <option key={t.id} value={String(t.id)}>
+                                                        {t.full_name}
+                                                    </option>
+                                                ))}
+                                            </select>
+                                        ) : (
+                                            <span className="font-bold">{r.technician_name || '—'}</span>
+                                        )}
+                                    </td>
                                     <td className="py-4 px-2 font-bold uppercase text-xs">{r.maintenance_type}</td>
                                     <td className="py-4 px-2">
                                         {canUpdate ? (
@@ -157,7 +208,15 @@ const Requests = () => {
                                                 type="button"
                                                 className="sketch-button bg-white font-black disabled:opacity-60"
                                                 disabled={savingId === r.id}
-                                                onClick={() => updateRow(r.id, { status: r.status, scheduled_end: r.scheduled_end || null })}
+                                                onClick={() =>
+                                                    updateRow(r.id, {
+                                                        status: r.status,
+                                                        scheduled_end: r.scheduled_end || null,
+                                                        ...(role === 'admin'
+                                                            ? { assigned_technician_id: r.assigned_technician_id || null }
+                                                            : {}),
+                                                    })
+                                                }
                                             >
                                                 <Save size={18} /> SAVE
                                             </button>
