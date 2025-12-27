@@ -18,6 +18,7 @@ export default {
             },
             fontFamily: {
                 'outfit': ['Outfit', 'sans-serif'],
+                'sketch': ['"Segoe Print"', '"Comic Sans MS"', '"Bradley Hand"', 'cursive'],
             }
         },
     },

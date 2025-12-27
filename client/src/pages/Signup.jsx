@@ -1,30 +1,48 @@
 import React, { useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { UserPlus, Mail, Lock, User, ShieldCheck } from 'lucide-react';
+import { useAuth } from '../context/AuthContext';
+
+const isValidEmail = (email) => /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/i.test(String(email || '').trim());
+const isStrongPassword = (password) => /^(?=.*[A-Z])(?=.*[^A-Za-z0-9]).{8,}$/.test(String(password || ''));
 
 const Signup = () => {
+    const { signup } = useAuth();
+    const navigate = useNavigate();
+
     const [formData, setFormData] = useState({
-        username: '',
+        full_name: '',
         email: '',
         password: '',
         confirmPassword: ''
     });
 
     const [error, setError] = useState('');
+    const [submitting, setSubmitting] = useState(false);
 
     const handleSubmit = (e) => {
         e.preventDefault();
-        // Simple mock validation
-        if (formData.password !== formData.confirmPassword) {
-            setError('Passwords do not match');
-            return;
-        }
-        if (formData.password.length < 8) {
-            setError('Password must be at least 8 characters');
-            return;
-        }
         setError('');
-        console.log('User signed up:', formData);
+
+        const name = String(formData.full_name || '').trim();
+        const email = String(formData.email || '').trim();
+
+        if (!name) return setError('Full name is required');
+        if (!isValidEmail(email)) return setError('Please enter a valid email address');
+        if (!isStrongPassword(formData.password)) return setError('Password must be 8+ chars with 1 uppercase and 1 special character');
+        if (formData.password !== formData.confirmPassword) return setError('Passwords do not match');
+
+        (async () => {
+            try {
+                setSubmitting(true);
+                await signup({ full_name: name, email, password: formData.password });
+                navigate('/dashboard', { replace: true });
+            } catch (err) {
+                setError(err?.response?.data?.error || 'Signup failed');
+            } finally {
+                setSubmitting(false);
+            }
+        })();
     };
 
     return (
@@ -63,7 +81,7 @@ const Signup = () => {
                                         type="text"
                                         placeholder="John Carter"
                                         className="flex-1 outline-none font-bold placeholder:opacity-30 text-sm"
-                                        onChange={(e) => setFormData({ ...formData, username: e.target.value })}
+                                        onChange={(e) => setFormData({ ...formData, full_name: e.target.value })}
                                     />
                                 </div>
                             </div>
@@ -107,7 +125,7 @@ const Signup = () => {
                                 </div>
                             </div>
 
-                            <button type="submit" className="w-full sketch-button bg-maint-blue justify-center py-3 mt-4 font-black">
+                            <button type="submit" disabled={submitting} className="w-full sketch-button bg-maint-blue justify-center py-3 mt-4 font-black disabled:opacity-60">
                                 CREATE ACCOUNT <UserPlus size={20} className="ml-2" />
                             </button>
                         </form>
